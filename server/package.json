@@ -1,0 +1,19 @@
+{
+  "name": "giftedforge-admin-api",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "migrate:assets": "node scripts/migrate-assets.js",
+    "seed:owner": "node scripts/seed-owner-admin.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "mongoose": "^9.6.1"
+  }
+}
