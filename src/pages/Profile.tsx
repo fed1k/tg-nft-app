@@ -9,7 +9,7 @@ import { adminClient } from '../services/admin'
 import { GIFTEDFORGE_DEPLOY } from '../config/giftedforgeDeploy'
 
 const meta = import.meta as ImportMeta & { env?: Record<string, string | undefined> }
-const SUPPORT_TELEGRAM = meta.env?.VITE_SUPPORT_TELEGRAM?.trim() || 'https://t.me/giftedforge_bot'
+const SUPPORT_TELEGRAM = meta.env?.VITE_SUPPORT_TELEGRAM?.trim() || 'https://t.me/Gifted_forge_help'
 
 const Profile = () => {
     const navigate = useNavigate()

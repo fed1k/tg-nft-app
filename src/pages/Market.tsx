@@ -194,7 +194,7 @@ const Market = () => {
                         </p>
                     </div>
                 ) : giftListings.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-x-3.5 gap-y-6 px-3">
+                    <div className="grid grid-cols-2 gap-x-3.5 gap-y-6 px-3 sm:grid-flow-col">
                         {giftListings.map(listing => (
                             <GiftListingCard
                                 key={listing.id}

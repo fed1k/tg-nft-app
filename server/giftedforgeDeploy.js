@@ -13,4 +13,4 @@ export const GIFTEDFORGE_API_ORIGIN = 'https://tg-nft-ui-wrml.vercel.app'
 
 /** TESTING ONLY — same bot as https://t.me/giftedforge_bot ; env TELEGRAM_BOT_TOKEN overrides when set */
 export const EMBEDDED_TELEGRAM_BOT_TOKEN =
-  '8064319708:AAGAKR9GYx9xZz5Xy20b3NP5FqlCyilNaX4'
+  '8750302455:AAGV4pzoPKNQdBllATsV2EdwP1vQXVpypnQ'

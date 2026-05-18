@@ -70,6 +70,8 @@ export interface TelegramWebApp {
   isVersionAtLeast?: (version: string) => boolean;
   /** Open https / t.me links from the Mini App (Telegram 6.4+). */
   openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
+  setHeaderColor: (color: string) => void;
+  setBackgroundColor: (color: string) => void;
 }
 
 export type AccountAccessState = 'loading' | 'allowed' | 'blocked'
@@ -174,6 +176,15 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
 
     tg.ready();
     tg.expand();
+    
+    // Force light theme colors in Telegram UI
+    try {
+      tg.setHeaderColor('#ffffff');
+      tg.setBackgroundColor('#ffffff');
+    } catch (e) {
+      console.warn('Failed to set Telegram theme colors', e);
+    }
+
     setWebApp(tg);
     setIsInTelegram(true);
     pullInit();

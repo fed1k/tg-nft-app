@@ -67,7 +67,7 @@ const NftCard = ({
     const favorited = fid ? isFavorite(fid) : false
 
     return (
-        <div className="border relative border-[#666F8B33] rounded-3xl px-2 pt-2 pb-5 bg-[#6B6AFD0D]">
+        <div className="border max-w-[166px] relative border-[#666F8B33] rounded-3xl px-2 pt-2 pb-5 bg-[#6B6AFD0D]">
             <div className="bg-[#0E06361A] h-[107px] w-[150px] absolute z-10 rounded-2xl"></div>
             {!adminMode && !collectionMode && fid ? (
                 <button
