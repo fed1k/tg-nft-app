@@ -29,6 +29,13 @@ const CLIENT_ORIGINS = Array.from(
     [...DEFAULT_CLIENT_ORIGINS, ...ENV_CLIENT_ORIGINS].map((o) => String(o).trim().replace(/\/+$/, '')),
   ),
 )
+console.log('CORS Allowed Origins:', CLIENT_ORIGINS)
+
+// Root health check to verify Nginx forwarding
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, status: 'Proxy working' })
+})
+
 const ASSET_CATEGORIES = new Set(['3D Art', 'Collectibles', 'Gaming'])
 const MARKET_TABS = new Set(['Explore', 'StarGifts'])
 const REFERRAL_BONUS_USD = Number.parseFloat(String(process.env.REFERRAL_BONUS_USD || '5')) || 5
@@ -63,9 +70,13 @@ app.use(
   }),
 )
 app.use(express.json())
-app.use((req, _res, next) => {
+app.use((req, res, next) => {
   req._rid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-  console.log(`[${req._rid}] ${req.method} ${req.path}`)
+  const start = Date.now()
+  res.on('finish', () => {
+    const duration = Date.now() - start
+    console.log(`[${req._rid}] ${req.method} ${req.originalUrl} ${res.statusCode} (${duration}ms)`)
+  })
   next()
 })
 
@@ -3214,8 +3225,6 @@ const isDirectRun = isPm2 || entryPath === scriptPath || (process.argv[1] && scr
 
 if (isDirectRun) {
   console.log('Starting Admin API (Direct/PM2)...')
-  // ... rest of the block
-  console.log('Starting Admin API...')
   console.log('MONGODB_URI length:', MONGODB_URI?.length || 0)
 
   ensureMongo()
