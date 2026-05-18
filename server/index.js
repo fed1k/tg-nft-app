@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { fileURLToPath } from 'node:url'
 import { Buffer } from 'node:buffer'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import express from 'express'
@@ -3204,11 +3205,17 @@ export default async function handler(req, res) {
 
 // Local Node server entrypoint
 const isDirectRun =
-  process.argv[1] && new URL(import.meta.url).pathname === process.argv[1]
+  process.argv[1] &&
+  (fileURLToPath(import.meta.url) === process.argv[1] ||
+    fileURLToPath(import.meta.url).endsWith(process.argv[1]))
 
 if (isDirectRun) {
+  console.log('Starting Admin API...')
+  console.log('MONGODB_URI length:', MONGODB_URI?.length || 0)
+
   ensureMongo()
     .then(() => {
+      console.log('MongoDB connected successfully')
       setInterval(() => {
         void runPendingMintSyncJob()
       }, 30000)
