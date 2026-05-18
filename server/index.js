@@ -3204,10 +3204,15 @@ export default async function handler(req, res) {
 }
 
 // Local Node server entrypoint
-const isDirectRun =
-  process.argv[1] &&
-  (fileURLToPath(import.meta.url) === process.argv[1] ||
-    fileURLToPath(import.meta.url).endsWith(process.argv[1]))
+const scriptPath = fileURLToPath(import.meta.url)
+const entryPath = process.argv[1] ? (process.argv[1].startsWith('/') ? process.argv[1] : fileURLToPath(new URL(process.argv[1], 'file://' + process.cwd() + '/'))) : null
+
+console.log('--- Entry Point Detection ---')
+console.log('Script Path:', scriptPath)
+console.log('Entry Path:', entryPath)
+console.log('argv[1]:', process.argv[1])
+
+const isDirectRun = entryPath === scriptPath || (process.argv[1] && scriptPath.endsWith(process.argv[1]))
 
 if (isDirectRun) {
   console.log('Starting Admin API...')
