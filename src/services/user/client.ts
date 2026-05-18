@@ -164,11 +164,12 @@ export interface MintAssetPayload {
   walletType?: 'TON' | 'EVM'
 }
 
-const meta = import.meta as ImportMeta & { env?: Record<string, string | undefined> }
 const ADMIN_BASE =
-  meta.env?.VITE_ADMIN_API_URL?.trim() || `${GIFTEDFORGE_DEPLOY.backendOrigin}/api/admin`
+  (import.meta.env.VITE_ADMIN_API_URL || '').trim() ||
+  `${GIFTEDFORGE_DEPLOY.backendOrigin}/api/admin`
 const API_BASE =
-  meta.env?.VITE_USER_API_URL?.trim() || `${GIFTEDFORGE_DEPLOY.backendOrigin}/api/user`
+  (import.meta.env.VITE_USER_API_URL || '').trim() ||
+  `${GIFTEDFORGE_DEPLOY.backendOrigin}/api/user`
 const ROOT_BASE = API_BASE.replace(/\/api\/user\/?$/, '')
 const REQUEST_TIMEOUT_MS = 12000
 const MINT_RESUME_TIMEOUT_MS = 25000

@@ -11,7 +11,8 @@ import type {
 import { GIFTEDFORGE_DEPLOY } from '../../config/giftedforgeDeploy'
 
 const API_BASE =
-  import.meta.env.VITE_ADMIN_API_URL?.trim() || `${GIFTEDFORGE_DEPLOY.backendOrigin}/api/admin`
+  (import.meta.env.VITE_ADMIN_API_URL || '').trim() ||
+  `${GIFTEDFORGE_DEPLOY.backendOrigin}/api/admin`
 const REQUEST_TIMEOUT_MS = 12000
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {

@@ -59,6 +59,7 @@ app.use(
   cors({
     origin(origin, callback) {
       const normalizedOrigin = origin?.replace(/\/+$/, '')
+      console.log(`[CORS Check] Origin: ${origin} | Allowed: ${CLIENT_ORIGINS.includes(normalizedOrigin)}`)
       if (!origin || CLIENT_ORIGINS.includes(normalizedOrigin)) {
         return callback(null, true)
       }
@@ -3154,6 +3155,14 @@ app.use((err, _req, res, _next) => {
     code: err.code || (statusCode === 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_ERROR'),
     message: err?.message || 'Internal server error',
     status: err.userStatus,
+  })
+})
+
+app.use((req, res) => {
+  console.log(`[404] ${req.method} ${req.originalUrl} - No route matched`)
+  res.status(404).json({
+    message: `Route ${req.method} ${req.originalUrl} not found`,
+    path: req.originalUrl,
   })
 })
 
