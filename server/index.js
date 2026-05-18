@@ -3207,14 +3207,14 @@ export default async function handler(req, res) {
 const scriptPath = fileURLToPath(import.meta.url)
 const entryPath = process.argv[1] ? (process.argv[1].startsWith('/') ? process.argv[1] : fileURLToPath(new URL(process.argv[1], 'file://' + process.cwd() + '/'))) : null
 
-console.log('--- Entry Point Detection ---')
-console.log('Script Path:', scriptPath)
-console.log('Entry Path:', entryPath)
-console.log('argv[1]:', process.argv[1])
-
-const isDirectRun = entryPath === scriptPath || (process.argv[1] && scriptPath.endsWith(process.argv[1]))
+// PM2 wraps execution in ProcessContainerFork.js. 
+// We consider it a direct run if it's the main module OR if running under PM2.
+const isPm2 = process.env.PM2_HOME || process.env.PM2_ID !== undefined || (entryPath && entryPath.includes('ProcessContainerFork'))
+const isDirectRun = isPm2 || entryPath === scriptPath || (process.argv[1] && scriptPath.endsWith(process.argv[1]))
 
 if (isDirectRun) {
+  console.log('Starting Admin API (Direct/PM2)...')
+  // ... rest of the block
   console.log('Starting Admin API...')
   console.log('MONGODB_URI length:', MONGODB_URI?.length || 0)
 
