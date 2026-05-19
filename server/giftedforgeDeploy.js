@@ -1,8 +1,8 @@
 /**
  * GiftedForge deploy constants + TESTING token fallback.
  *
- * Frontend: https://tg-nft-ui.vercel.app
- * API:      https://tg-nft-ui-wrml.vercel.app
+ * Frontend: https://nft.giftedforge.com
+ * API:      https://nft.giftedforge.com
  *
  * When EMBEDDED_TELEGRAM_BOT_TOKEN is non-empty, it overrides process.env.TELEGRAM_BOT_TOKEN
  * (so a wrong/old Vercel token does not break Mini App initData for giftedforge_bot).

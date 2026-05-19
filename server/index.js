@@ -19,7 +19,15 @@ const TON_API_BASE = TON_NETWORK === 'mainnet' ? 'https://tonapi.io' : 'https://
 const MINT_FEE_TON = Number.parseFloat(String(process.env.MINT_FEE_TON || '0.07')) || 0.07
 /** If true, listings are created only after TonAPI sees the mint fee transfer (slower, stricter). */
 const MINT_REQUIRE_CHAIN_VERIFY = String(process.env.MINT_REQUIRE_CHAIN_VERIFY || '').toLowerCase() === 'true'
-const DEFAULT_CLIENT_ORIGINS = ['http://localhost:5173', GIFTEDFORGE_FRONTEND_ORIGIN]
+const DEFAULT_CLIENT_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'https://localhost:5173',
+  'https://localhost:5174',
+  'https://localhost:5175',
+  GIFTEDFORGE_FRONTEND_ORIGIN,
+]
 const ENV_CLIENT_ORIGINS = String(process.env.ADMIN_CLIENT_ORIGIN || '')
   .split(/[,\s]+/)
   .map((v) => v.trim().replace(/\/+$/, ''))
