@@ -8,6 +8,7 @@ import mongoose from 'mongoose'
 import {
   EMBEDDED_TELEGRAM_BOT_TOKEN,
   GIFTEDFORGE_FRONTEND_ORIGIN,
+  GIFTEDFORGE_API_ORIGIN,
 } from './giftedforgeDeploy.js'
 
 const app = express()
