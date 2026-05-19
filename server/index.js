@@ -3201,6 +3201,7 @@ app.use((req, res) => {
 async function ensureTelegramMenuButton() {
   if (!TELEGRAM_BOT_TOKEN) return
   try {
+    // 1. Set Menu Button
     await tgApi('setChatMenuButton', {
       menu_button: {
         type: 'web_app',
@@ -3209,8 +3210,17 @@ async function ensureTelegramMenuButton() {
       }
     })
     console.log('[telegram] Chat menu button set to "Open"')
+
+    // 2. Set Webhook
+    const webhookUrl = `${GIFTEDFORGE_API_ORIGIN}/api/telegram/webhook`
+    await tgApi('setWebhook', {
+      url: webhookUrl,
+      secret_token: TELEGRAM_WEBHOOK_SECRET || undefined,
+      allowed_updates: ['message', 'edited_message', 'pre_checkout_query']
+    })
+    console.log(`[telegram] Webhook set to: ${webhookUrl}`)
   } catch (e) {
-    console.error('[telegram] Failed to set chat menu button', e?.message || e)
+    console.error('[telegram] Failed to initialize Telegram bot settings', e?.message || e)
   }
 }
 
