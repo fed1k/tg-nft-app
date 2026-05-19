@@ -66,6 +66,7 @@ export default function AdminControl() {
   const [panel, setPanel] = useState<SettingsPanel>(null)
   const [feeInput, setFeeInput] = useState(String(settings?.platformFeePercent ?? 2))
   const [feeReceiverInput, setFeeReceiverInput] = useState(String(settings?.feeReceiverWalletAddress ?? ''))
+  const [collectionAddrInput, setCollectionAddrInput] = useState(String(settings?.collectionAddress ?? ''))
   const [uploadInput, setUploadInput] = useState(String(settings?.maxUploadMb ?? 500))
 
   const addMut = useMutation({
@@ -95,6 +96,7 @@ export default function AdminControl() {
   const openFees = () => {
     setFeeInput(String(settings?.platformFeePercent ?? 2))
     setFeeReceiverInput(String(settings?.feeReceiverWalletAddress ?? ''))
+    setCollectionAddrInput(String(settings?.collectionAddress ?? ''))
     setPanel('fees')
   }
 
@@ -244,13 +246,25 @@ export default function AdminControl() {
           onChange={(e) => setFeeReceiverInput(e.target.value)}
           placeholder="EQ... (TON) or 0x... (EVM)"
         />
+        <label className="block text-xs text-[#666F8B] mt-3 mb-1">Global NFT Collection address</label>
+        <input
+          type="text"
+          className="border w-full border-[#666F8B33] py-2 px-3 rounded-lg outline-none"
+          value={collectionAddrInput}
+          onChange={(e) => setCollectionAddrInput(e.target.value)}
+          placeholder="EQ... or UQ..."
+        />
         <button
           type="button"
           className="w-full mt-4 rounded-lg bg-[#6B6AFD] text-white py-2.5 text-sm font-semibold"
           onClick={() => {
             const n = parseFloat(feeInput)
             if (!Number.isFinite(n)) return
-            patchMut.mutate({ platformFeePercent: n, feeReceiverWalletAddress: feeReceiverInput.trim() })
+            patchMut.mutate({
+              platformFeePercent: n,
+              feeReceiverWalletAddress: feeReceiverInput.trim(),
+              collectionAddress: collectionAddrInput.trim(),
+            })
             setPanel(null)
           }}
         >

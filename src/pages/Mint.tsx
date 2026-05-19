@@ -83,12 +83,13 @@ const Mint = () => {
     const platformFeeOnMintTon = Number(((mintFeeTonNum * platformFeePercent) / 100).toFixed(6))
 
     // Collection address — reactive: re-reads localStorage whenever the user returns to this tab
-    const [COLLECTION_ADDRESS, setCollectionAddress] = useState<string | null>(() => getCollectionAddress())
+    const [COLLECTION_ADDRESS, setCollectionAddress] = useState<string | null>(() => getCollectionAddress(platformSettings?.collectionAddress))
     useEffect(() => {
         const refresh = () => {
-            const addr = getCollectionAddress()
+            const addr = getCollectionAddress(platformSettings?.collectionAddress)
             if (addr) setCollectionAddress(addr)
         }
+        refresh()
         // Re-check when tab gains focus (user returns from wallet or wallet page)
         window.addEventListener('focus', refresh)
         document.addEventListener('visibilitychange', refresh)
@@ -96,7 +97,7 @@ const Mint = () => {
             window.removeEventListener('focus', refresh)
             document.removeEventListener('visibilitychange', refresh)
         }
-    }, [])
+    }, [platformSettings?.collectionAddress])
 
     // Form state
     const [name, setName] = useState('')
@@ -203,7 +204,7 @@ const Mint = () => {
     const doMint = useCallback(async () => {
         if (!imageFile) throw new Error('No image selected')
         if (!COLLECTION_ADDRESS) throw new Error(
-            'Collection address not set.\nAdd VITE_TON_COLLECTION_ADDRESS in .env'
+            'Collection address not set.\nAsk admin to set Global Collection Address in Admin Panel, or deploy your own in Wallet tab.'
         )
 
         setSteps(INITIAL_STEPS)

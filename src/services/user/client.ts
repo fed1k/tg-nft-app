@@ -35,6 +35,7 @@ export interface UserAssetDetailResponse {
 export interface UserPlatformSettings {
   platformFeePercent: number
   feeReceiverWalletAddress: string
+  collectionAddress: string
 }
 
 export interface UserOfferItem {

@@ -165,7 +165,7 @@ const Detail = () => {
         }
     }
 
-    const collectionHint = String(asset?.collectionAddress || getCollectionAddress() || '').trim()
+    const collectionHint = String(asset?.collectionAddress || getCollectionAddress(platformSettings?.collectionAddress) || '').trim()
 
     useEffect(() => {
         setResolvedNftItemAddress(null)

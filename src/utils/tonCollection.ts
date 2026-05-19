@@ -167,10 +167,11 @@ export function saveCollectionAddress(address: string) {
 }
 
 /** Get collection address in bounceable format — reads .env first, then localStorage */
-export function getCollectionAddress(): string | null {
+export function getCollectionAddress(fallback?: string | null): string | null {
     const raw =
         import.meta.env.VITE_TON_COLLECTION_ADDRESS?.trim() ||
         localStorage.getItem(COLLECTION_STORAGE_KEY) ||
+        fallback ||
         null
     return normalizeCollectionAddress(raw)
 }

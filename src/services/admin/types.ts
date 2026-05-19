@@ -71,6 +71,7 @@ export interface AdminStaff {
 export interface PlatformSettings {
   platformFeePercent: number
   feeReceiverWalletAddress: string
+  collectionAddress: string
   /** Stars marketplace fees accrued in-app (admin ledger). */
   platformStarsAccrued?: number
   maxUploadMb: number

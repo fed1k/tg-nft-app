@@ -189,6 +189,7 @@ const settingsSchema = new mongoose.Schema(
   {
     platformFeePercent: { type: Number, default: 2 },
     feeReceiverWalletAddress: { type: String, default: '', trim: true },
+    collectionAddress: { type: String, default: '', trim: true },
     /** In-app Stars collected from Stars-based marketplace checkout (not on-chain). */
     platformStarsAccrued: { type: Number, default: 0 },
     maxUploadMb: { type: Number, default: 500 },
@@ -1332,6 +1333,7 @@ app.get('/api/admin/settings', async (_req, res) => {
   res.json({
     platformFeePercent: settings.platformFeePercent,
     feeReceiverWalletAddress: settings.feeReceiverWalletAddress || '',
+    collectionAddress: settings.collectionAddress || '',
     platformStarsAccrued: Number(settings.platformStarsAccrued) || 0,
     maxUploadMb: settings.maxUploadMb,
     tonEnabled: settings.tonEnabled,
@@ -1343,7 +1345,7 @@ app.patch('/api/admin/settings', async (req, res) => {
   let settings = await AdminSettings.findOne()
   if (!settings) settings = await AdminSettings.create({})
 
-  const allowed = ['platformFeePercent', 'feeReceiverWalletAddress', 'maxUploadMb', 'tonEnabled', 'maintenanceMode']
+  const allowed = ['platformFeePercent', 'feeReceiverWalletAddress', 'collectionAddress', 'maxUploadMb', 'tonEnabled', 'maintenanceMode']
   const patch = {}
   for (const key of allowed) {
     if (key in req.body) patch[key] = req.body[key]
@@ -1354,6 +1356,7 @@ app.patch('/api/admin/settings', async (req, res) => {
   res.json({
     platformFeePercent: settings.platformFeePercent,
     feeReceiverWalletAddress: settings.feeReceiverWalletAddress || '',
+    collectionAddress: settings.collectionAddress || '',
     platformStarsAccrued: Number(settings.platformStarsAccrued) || 0,
     maxUploadMb: settings.maxUploadMb,
     tonEnabled: settings.tonEnabled,
@@ -1387,6 +1390,7 @@ app.get('/api/user/platform-settings', async (_req, res) => {
   res.json({
     platformFeePercent: Number(settings.platformFeePercent) || 0,
     feeReceiverWalletAddress: String(settings.feeReceiverWalletAddress || '').trim(),
+    collectionAddress: String(settings.collectionAddress || '').trim(),
   })
 })
 
