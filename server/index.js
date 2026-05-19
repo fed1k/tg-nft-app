@@ -2437,6 +2437,30 @@ app.post('/api/telegram/webhook', async (req, res) => {
   }
 
   const msg = update?.message || update?.edited_message
+  
+  if (msg?.text && !msg.successful_payment) {
+    const chatId = msg.chat.id
+    try {
+      await tgApi('sendMessage', {
+        chat_id: chatId,
+        text: 'Welcome to GiftedForge! Tap the button below to open the app:',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: 'Open',
+                web_app: { url: GIFTEDFORGE_FRONTEND_ORIGIN }
+              }
+            ]
+          ]
+        }
+      })
+    } catch (e) {
+      console.error('[telegram-webhook] sendMessage failed', e?.message || e)
+    }
+    return res.json({ ok: true })
+  }
+
   const sp = msg?.successful_payment
   if (!msg || !sp) return res.json({ ok: true })
 
@@ -3174,8 +3198,25 @@ app.use((req, res) => {
   })
 })
 
+async function ensureTelegramMenuButton() {
+  if (!TELEGRAM_BOT_TOKEN) return
+  try {
+    await tgApi('setChatMenuButton', {
+      menu_button: {
+        type: 'web_app',
+        text: 'Open',
+        web_app: { url: GIFTEDFORGE_FRONTEND_ORIGIN }
+      }
+    })
+    console.log('[telegram] Chat menu button set to "Open"')
+  } catch (e) {
+    console.error('[telegram] Failed to set chat menu button', e?.message || e)
+  }
+}
+
 let mongoConnectPromise
 let bootstrapOwnersDone = false
+let menuButtonSet = false
 let pendingMintJobRunning = false
 async function ensureMongo() {
   if (mongoose.connection.readyState === 1) {
@@ -3186,6 +3227,10 @@ async function ensureMongo() {
       } catch (err) {
         console.error('[bootstrap-owner]', err?.message || err)
       }
+    }
+    if (!menuButtonSet) {
+      menuButtonSet = true
+      void ensureTelegramMenuButton()
     }
     return
   }
@@ -3204,6 +3249,10 @@ async function ensureMongo() {
     } catch (err) {
       console.error('[bootstrap-owner]', err?.message || err)
     }
+  }
+  if (!menuButtonSet) {
+    menuButtonSet = true
+    void ensureTelegramMenuButton()
   }
 }
 
