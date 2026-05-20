@@ -9,7 +9,7 @@ const headerTextMapping: Record<string, string> = {
   '/app/profile': 'Profile',
   '/app/my-collection': 'Your Collection',
   '/app/favorites': 'Favourites',
-  '/app/offers': 'Offers',
+  '/offers': 'Offers',
 }
 
 const TopNavbar = () => {
@@ -39,7 +39,7 @@ const TopNavbar = () => {
         <button
           type="button"
           className="p-0 bg-transparent border-0 cursor-pointer"
-          onClick={() => navigate('/app/offers')}
+          onClick={() => navigate('/offers')}
           aria-label="Offers"
         >
           <img className="w-6 h-6" src="/notification.svg" alt="" />

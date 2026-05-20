@@ -339,7 +339,7 @@ const Profile = () => {
 
                         <button
                             type="button"
-                            onClick={() => navigate('/app/offers')}
+                            onClick={() => navigate('/offers')}
                             className="gap-2.5 flex w-full text-left items-center mt-3 border border-[#666F8B33] rounded-2xl py-3 px-[13px] cursor-pointer hover:bg-[#6B6AFD0D] transition-colors bg-transparent"
                         >
                             <div className="w-9 h-9 border border-[#666F8B33] flex items-center justify-center rounded-lg">
