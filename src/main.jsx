@@ -59,7 +59,7 @@ const queryClient = new QueryClient()
 const tonManifestUrl = import.meta.env.VITE_APP_URL?.trim()
   ? `${import.meta.env.VITE_APP_URL}/tonconnect-manifest.json`
   : typeof window !== 'undefined' &&
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? `${window.location.origin}/tonconnect-manifest.json`
     : `${GIFTEDFORGE_DEPLOY.frontendOrigin}/tonconnect-manifest.json`
 
@@ -80,6 +80,14 @@ const tonActionsConfig = {
 const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/splash" replace /> },
   { path: '/splash', element: <Splash /> },
+  {
+    path: '/offers',
+    element: (
+      <RequireAppAccess>
+        <Offers />
+      </RequireAppAccess>
+    ),
+  },
   {
     path: '/swap',
     element: (
@@ -127,7 +135,6 @@ const router = createBrowserRouter([
       { path: 'mint', element: <Mint /> },
       { path: 'market', element: <Market /> },
       { path: 'my-collection', element: <MyCollection /> },
-      { path: 'offers', element: <Offers /> },
       { path: 'favorites', element: <Favorites /> },
       { path: 'gifts', element: <Gifts /> },
       { path: 'profile', element: <Profile /> },

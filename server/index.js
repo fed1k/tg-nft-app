@@ -155,6 +155,11 @@ const txSchema = new mongoose.Schema(
     feeLabel: { type: String, default: '', trim: true },
     /** Optional link back to marketplace asset (e.g. offer rows). */
     assetId: { type: mongoose.Schema.Types.ObjectId, ref: 'AdminAsset' },
+    status: {
+      type: String,
+      enum: ['Pending', 'Accepted', 'Rejected', 'Cancelled'],
+      default: 'Pending',
+    },
   },
   commonOpts,
 )
@@ -449,6 +454,8 @@ function toAdminTx(doc) {
     timeLabel: minutesAgoLabel(doc.createdAt),
     amount: doc.amount,
     feeLabel: doc.feeLabel,
+    status: doc.status || 'Pending',
+    assetId: doc.assetId ? String(doc.assetId) : undefined,
   }
 }
 
@@ -3127,10 +3134,34 @@ app.get('/api/user/offers', async (req, res) => {
         fromUser: row.fromUser,
         toUser: row.toUser,
         direction: mineSent ? 'sent' : 'received',
-        status: 'Pending',
+        status: row.status || 'Pending',
       }
     }),
   )
+})
+
+app.post('/api/user/offers/:id/accept', async (req, res) => {
+  const tx = await AdminTransaction.findById(req.params.id)
+  if (!tx) return res.status(404).json({ message: 'Offer not found' })
+  tx.status = 'Accepted'
+  await tx.save()
+  res.json({ ok: true, message: 'Offer accepted' })
+})
+
+app.post('/api/user/offers/:id/decline', async (req, res) => {
+  const tx = await AdminTransaction.findById(req.params.id)
+  if (!tx) return res.status(404).json({ message: 'Offer not found' })
+  tx.status = 'Rejected'
+  await tx.save()
+  res.json({ ok: true, message: 'Offer declined' })
+})
+
+app.post('/api/user/offers/:id/cancel', async (req, res) => {
+  const tx = await AdminTransaction.findById(req.params.id)
+  if (!tx) return res.status(404).json({ message: 'Offer not found' })
+  tx.status = 'Cancelled'
+  await tx.save()
+  res.json({ ok: true, message: 'Offer cancelled' })
 })
 
 app.post('/api/user/swap', async (req, res) => {

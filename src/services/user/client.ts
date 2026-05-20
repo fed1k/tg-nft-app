@@ -48,7 +48,7 @@ export interface UserOfferItem {
   fromUser: string
   toUser: string
   direction: 'sent' | 'received'
-  status: 'Pending' | 'Accepted' | 'Rejected'
+  status: 'Pending' | 'Accepted' | 'Rejected' | 'Cancelled'
 }
 
 export interface TelegramGiftSender {
@@ -362,6 +362,21 @@ export const userClient = {
         walletAddress || '',
       )}`,
     ),
+
+  acceptOffer: async (id: string) =>
+    api<{ ok: boolean; message: string }>(`/offers/${encodeURIComponent(id)}/accept`, {
+      method: 'POST',
+    }),
+
+  declineOffer: async (id: string) =>
+    api<{ ok: boolean; message: string }>(`/offers/${encodeURIComponent(id)}/decline`, {
+      method: 'POST',
+    }),
+
+  cancelOffer: async (id: string) =>
+    api<{ ok: boolean; message: string }>(`/offers/${encodeURIComponent(id)}/cancel`, {
+      method: 'POST',
+    }),
 
   createStarsTopupLink: async (payload: {
     amountStars: number

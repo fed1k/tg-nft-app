@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTelegram } from '../contexts/TelegramContext'
 import { useTonAddress } from '@tonconnect/ui-react'
 import { useAccount } from 'wagmi'
@@ -9,43 +9,83 @@ import { displayHandle } from '../utils/displayHandle'
 
 const Offers = () => {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { user } = useTelegram()
   const tonAddress = useTonAddress()
   const tonRawAddress = useTonAddress(false)
   const { address: evmAddress } = useAccount()
-  const [tab, setTab] = useState<'all' | 'sent' | 'received'>('all')
+  const [tab, setTab] = useState<'sent' | 'received'>('received')
 
   const usernameForApi = user?.username ? `@${user.username}` : ''
   const walletForApi = (tonRawAddress || tonAddress || evmAddress || '').trim()
 
-  const { data: offers = [], isLoading, isError } = useQuery({
+  const { data: remoteOffers = [], isLoading, isError } = useQuery({
     queryKey: ['user-offers', tab, usernameForApi, user?.id ?? 0, walletForApi],
     queryFn: () => userClient.getOffers(tab, usernameForApi, user?.id, walletForApi || undefined),
     staleTime: 10_000,
   })
 
+  // Local placeholders for testing
+  // const mockOffers: any[] = tab === 'received' ? [
+  //   { id: 'mock-r1', title: 'Cyber Bear #42', amount: '1.5 TON', status: 'Pending', direction: 'received', fromUser: '@crypto_king', fromUserName: 'Crypto King', fromUserPic: '/avatari.png', toUser: 'You', timeLabel: '5m' },
+  //   { id: 'mock-r2', title: 'Golden Star Gift', amount: '500 Stars', status: 'Accepted', direction: 'received', fromUser: '@gift_master', fromUserName: 'Gift Master', fromUserPic: '/avatari.png', toUser: 'You', timeLabel: '1h' },
+  //   { id: 'mock-r3', title: 'Rare Diamond', amount: '0.8 TON', status: 'Rejected', direction: 'received', fromUser: '@seller_x', fromUserName: 'Seller X', fromUserPic: '/avatari.png', toUser: 'You', timeLabel: '2h' },
+  // ] : [
+  //   { id: 'mock-s1', title: 'Neon Fox #1', amount: '1.2 TON', status: 'Pending', direction: 'sent', fromUser: 'You', toUser: '@collector_a', toUserName: 'Collector A', toUserPic: '/avatari.png', timeLabel: '10m' },
+  //   { id: 'mock-s2', title: 'Space Cat', amount: '3.0 TON', status: 'Accepted', direction: 'sent', fromUser: 'You', toUser: '@whale_z', toUserName: 'Whale Z', toUserPic: '/avatari.png', timeLabel: '1d' },
+  //   { id: 'mock-s3', title: 'Fire Dragon', amount: '0.5 TON', status: 'Rejected', direction: 'sent', fromUser: 'You', toUser: '@art_fan', toUserName: 'Art Fan', toUserPic: '/avatari.png', timeLabel: '3d' },
+  // ]
+
+  const offers = remoteOffers.length > 0 ? remoteOffers : []
+
+  const getUsdPrice = (amountStr: string) => {
+    const num = parseFloat(amountStr)
+    if (isNaN(num)) return '$0.00'
+    if (amountStr.toLowerCase().includes('ton')) return `$${(num * 5.5).toFixed(2)}`
+    if (amountStr.toLowerCase().includes('stars')) return `$${(num * 0.02).toFixed(2)}`
+    return '$0.00'
+  }
+
+  const handleAction = async (action: 'accept' | 'decline' | 'cancel', id: string) => {
+    try {
+      if (action === 'accept') await userClient.acceptOffer(id)
+      else if (action === 'decline') await userClient.declineOffer(id)
+      else if (action === 'cancel') await userClient.cancelOffer(id)
+      queryClient.invalidateQueries({ queryKey: ['user-offers'] })
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   return (
-    <div className="px-3 pb-28">
-      <div className="flex items-center gap-3 pt-2 pb-6">
-        <button type="button" onClick={() => navigate(-1)} className="p-1" aria-label="Back">
+    <div className="px-3 pb-28 pt-12">
+      <div className="flex items-center gap-3 pt-2 pb-6 relative justify-center">
+        <button type="button" onClick={() => navigate("/app/profile")} className="p-1 absolute left-3" aria-label="Back">
           <img className="w-6 h-6" src="/arrow-left.svg" alt="" />
         </button>
-        <h1 className="text-xl font-semibold text-[#0E0636]">Offers</h1>
+        <h1 className="text-lg font-medium text-[#0E0636]">Offers</h1>
       </div>
 
-      <div className="flex gap-2 pb-5">
-        {(['all', 'sent', 'received'] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-              tab === t ? 'bg-[#0E0636] text-white' : 'bg-[#F5F7FB] text-[#666F8B]'
-            }`}
-          >
-            {t === 'all' ? 'All' : t === 'sent' ? 'Sent' : 'Received'}
-          </button>
-        ))}
+      <div className="border flex h-11 relative border-[#666F8B33] p-1 rounded-xl mb-12">
+        <div
+          className={`h-9 bg-[#0E0636] transition-all ${tab === 'received' ? 'left-1' : 'left-[51%]'} absolute w-[48%] rounded-lg`}
+        />
+
+        <button
+          type="button"
+          onClick={() => setTab('received')}
+          className={`z-10 cursor-pointer text-sm flex items-center gap-1.5 justify-center flex-1 ${tab === 'received' ? 'text-white' : 'text-[#666F8B]'}`}
+        >
+          <p>Received</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTab('sent')}
+          className={`z-10 cursor-pointer text-sm flex items-center gap-1.5 justify-center flex-1 ${tab === 'sent' ? 'text-white' : 'text-[#666F8B]'}`}
+        >
+          <p>Sent</p>
+        </button>
       </div>
 
       {isLoading ? (
@@ -55,43 +95,97 @@ const Offers = () => {
       ) : offers.length === 0 ? (
         <p className="text-sm text-[#666F8B]">No offers found for this view.</p>
       ) : (
-        <div className="space-y-3">
-          {offers.map((offer) => (
-            <div
-              key={offer.id}
-              role={offer.assetId ? 'button' : undefined}
-              tabIndex={offer.assetId ? 0 : undefined}
-              onClick={() => {
-                if (offer.assetId) navigate(`/asset/${offer.assetId}`)
-              }}
-              onKeyDown={(e) => {
-                if (offer.assetId && (e.key === 'Enter' || e.key === ' ')) {
-                  e.preventDefault()
-                  navigate(`/asset/${offer.assetId}`)
-                }
-              }}
-              className={`border border-[#666F8B33] rounded-2xl p-3 bg-[#F5F7FB66] ${
-                offer.assetId ? 'cursor-pointer hover:bg-[#6B6AFD0D] transition-colors' : ''
-              }`}
-            >
-              <div className="flex justify-between items-start">
-                <p className="text-sm font-semibold text-[#0E0636]">{offer.title}</p>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#6B6AFD0D] text-[#6B6AFD]">
-                  {offer.status}
-                </span>
+        <div className="space-y-6">
+          {offers.map((offer) => {
+            const isSent = offer.direction === 'sent'
+            const userPic = isSent ? (offer?.toUserPic || '/white-man.jpg') : (offer?.fromUserPic || '/white-man.jpg')
+            const fullName = isSent ? (offer?.toUserName || displayHandle(offer.toUser)) : (offer?.fromUserName || displayHandle(offer.fromUser))
+
+            return (
+              <div
+                key={offer.id}
+                role={offer.assetId ? 'button' : undefined}
+                tabIndex={offer.assetId ? 0 : undefined}
+                onClick={() => {
+                  if (offer.assetId) navigate(`/asset/${offer.assetId}`)
+                }}
+                onKeyDown={(e) => {
+                  if (offer.assetId && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault()
+                    navigate(`/asset/${offer.assetId}`)
+                  }
+                }}
+                className={`border ${offer.status === "Pending" || ( offer.status === "Accepted" && offer.direction === "sent" ) ? "bg-[#F5F7FB]" : "bg-white"} border-[#666F8B33] rounded-2xl p-3  ${offer.assetId ? 'cursor-pointer hover:bg-[#6B6AFD0D] transition-colors' : ''
+                  }`}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex items-start gap-2">
+                    <img src={userPic} alt="" className="w-12 h-12 rounded-xl object-cover border border-[#666F8B33]" />
+                    <div className='mt-1.5'>
+                      <p className="text-sm font-medium text-[#0E0636] leading-none">{fullName}</p>
+                      <p className="text-[10px] text-[#666F8B] mt-2.5"><span className='font-semibold text-xs'>{offer.amount}</span> {getUsdPrice(offer.amount)} USD</p>
+                    </div>
+                  </div>
+                  <span className={`text-[8px] mt-1.5 px-2 py-1 rounded-full font-medium ${offer.status === 'Accepted' ? 'bg-[#6B6AFD0D] text-[#6B6AFD]' :
+                    offer.status === 'Rejected' || offer.status === 'Cancelled' ? 'bg-[#F9002D0D] text-[#F9002D]' :
+                      'bg-[#FF8E001A] text-[#FF8E00]'
+                    }`}>
+                    {offer.status}
+                  </span>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="" onClick={(e) => e.stopPropagation()}>
+                  {offer.direction === 'received' && offer.status === 'Pending' && (
+                    <div className="flex gap-2 mt-4">
+
+                      <button
+                        onClick={() => handleAction('decline', offer.id)}
+                        className="flex-1 border border-[#6B6AFD] text-[#6B6AFD] py-2.5 rounded-lg text-xs font-semibold hover:bg-[#DA09090D] transition-colors"
+                      >
+                        Decline
+                      </button>
+                      <button
+                        onClick={() => handleAction('accept', offer.id)}
+                        className="flex-1 bg-[#6B6AFD] text-white py-2.5 rounded-lg text-xs font-semibold hover:bg-[#5856D6] transition-colors"
+                      >
+                        Accept
+                      </button>
+                    </div>
+                  )}
+
+                  {offer.direction === 'sent' && offer.status === 'Pending' && (
+                    <button
+                      onClick={() => handleAction('cancel', offer.id)}
+                      className="w-full bg-white mt-4 border border-[#666F8B33] text-[#666F8B] py-2.5 rounded-lg text-xs font-medium hover:bg-[#666F8B0D] transition-colors"
+                    >
+                      Cancel Offer
+                    </button>
+                  )}
+
+                  {offer.direction === 'sent' && offer.status === 'Accepted' && (
+                    <button
+                      onClick={() => navigate('/wallet')}
+                      className="w-full bg-white mt-4 border border-[#666F8B33] text-[#666F8B] py-2.5 rounded-lg text-xs font-medium hover:bg-[#666F8B0D] transition-colors"
+                    >
+                      View Transactions
+                    </button>
+                  )}
+
+                  {offer.direction === 'sent' && offer.status === 'Rejected' && (
+                    <button
+                      onClick={() => {
+                        if (offer.assetId) navigate(`/asset/${offer.assetId}`)
+                      }}
+                      className="w-full mt-4 border border-[#666F8B33] text-[#666F8B] py-2.5 rounded-lg text-xs font-medium hover:bg-[#666F8B0D] transition-colors"
+                    >
+                      Re-offer
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="pt-2 flex justify-between text-xs text-[#666F8B]">
-                <p>{offer.direction === 'sent' ? 'You sent' : 'You received'}</p>
-                <p>{offer.amount}</p>
-              </div>
-              <div className="pt-1 flex justify-between text-[10px] text-[#666F8B]">
-                <p>
-                  {displayHandle(offer.fromUser)} → {displayHandle(offer.toUser)}
-                </p>
-                <p>{offer.timeLabel} ago</p>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
