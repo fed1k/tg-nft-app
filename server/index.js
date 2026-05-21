@@ -738,7 +738,7 @@ function enrichAssetForViewer(doc, userRow, handles) {
 }
 
 /** 1 TON = 100,000 Stars at display rate 1,000 ★ = 0.01 TON */
-const STARS_PER_TON_NUM = 100_000
+const STARS_PER_TON_NUM = 200
 
 function ensureValidAssetInput({ title, username, category, marketTab }) {
   if (!title?.trim() || !username?.trim()) {

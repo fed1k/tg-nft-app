@@ -9,8 +9,8 @@ const meta = import.meta as ImportMeta & { env?: Record<string, string | undefin
 const IS_TESTNET = meta.env?.VITE_TON_NETWORK === 'testnet'
 const TON_API_BASE = IS_TESTNET ? 'https://testnet.tonapi.io' : 'https://tonapi.io'
 
-/** Matches server STARS_PER_TON_NUM: 1,000 ★ = 0.01 TON */
-const STARS_PER_TON = 100_000
+/** Matches server STARS_PER_TON_NUM: 200 ★ = 1.00 TON */
+const STARS_PER_TON = 200
 
 const Swap = () => {
     const navigate = useNavigate()
@@ -200,9 +200,9 @@ const Swap = () => {
                 <div className="border border-[#666F8B33] rounded-lg pt-4">
                     <div className="flex justify-between px-[13px]">
                         <p className="font-medium text-xs text-[#666F8B]">
-                            1,000 <img className="inline -translate-y-px" src="/stargray.svg" alt="" />
+                            200 <img className="inline -translate-y-px" src="/stargray.svg" alt="" />
                         </p>
-                        <p className="font-semibold text-xs text-[#666F8B]">= 0.01 {cryptoSymbol}</p>
+                        <p className="font-semibold text-xs text-[#666F8B]">= 1.00 {cryptoSymbol}</p>
                     </div>
                     <p className="text-end font-light text-[10px] pr-[13px] text-[#666F8B] pt-2">
                         In-app Stars balance · Refreshes when you open this screen

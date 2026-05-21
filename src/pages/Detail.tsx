@@ -18,7 +18,7 @@ import {
     tonAddressesLooselyEqual,
 } from '../utils/tonNft'
 
-const STARS_PER_TON = 100_000
+const STARS_PER_TON = 200
 
 const meta = import.meta as ImportMeta & { env?: Record<string, string | undefined> }
 
