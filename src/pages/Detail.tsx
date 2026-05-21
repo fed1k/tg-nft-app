@@ -106,6 +106,22 @@ const Detail = () => {
         queryFn: () => userClient.getPlatformSettings(),
         staleTime: 30_000,
     })
+
+    const { data: tonPriceUsd } = useQuery({
+        queryKey: ['ton-price'],
+        queryFn: async () => {
+            try {
+                const res = await fetch('https://tonapi.io/v2/rates?tokens=ton&currencies=usd')
+                const data = await res.json()
+                return data.rates?.TON?.prices?.USD ?? 0
+            } catch (err) {
+                console.error('[Detail] Failed to fetch TON price', err)
+                return 0
+            }
+        },
+        staleTime: 60_000,
+    })
+
     const starsAvailable = buyerProfile?.stars ?? 0
 
     const viewerOwned = !!data?.viewerOwned
@@ -128,6 +144,10 @@ const Detail = () => {
     const gasTon = 0.002
     const totalTon = itemTon + gasTon
     const priceStarsTotal = Math.round(itemTon * STARS_PER_TON)
+    const priceUsdTotal = itemTon * (tonPriceUsd || 0)
+    const displayPriceUsd = priceUsdTotal > 0 ? priceUsdTotal.toFixed(2) : '0.00'
+    const displayPriceStars = priceStarsTotal.toLocaleString()
+
     const platformFeeStars = Math.round((priceStarsTotal * feePercent) / 100)
     const sellerPayoutStars = Math.max(0, priceStarsTotal - platformFeeStars)
 
@@ -590,7 +610,7 @@ const Detail = () => {
                         <p className="font-light text-sm text-[#0E0636]">{sellerName}</p>
                     </div>
                     <div className="flex items-center gap-1">
-                        <p className="text-[#6B6AFD] font-light text-xs">$0.21 = 210</p>
+                        <p className="text-[#6B6AFD] font-light text-xs">${displayPriceUsd} = {displayPriceStars}</p>
                         <img className="w-3 h-3" src="/star.svg" alt="" />
                     </div>
                 </div>
