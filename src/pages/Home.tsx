@@ -162,7 +162,7 @@ const Home = () => {
                         ) : (
                             <p className='font-semibold text-sm text-[#666F8B]'>—</p>
                         )} */}
-                        <p className='font-semibold text-2xl'>{tonBalanceTon} <span className='text-sm font-normal'>TON</span></p>
+                        <p className='font-semibold text-2xl'>{tonBalanceTon?.toFixed(2)} <span className='text-sm font-normal'>TON</span></p>
                         <img className='w-4 h-4' alt="" src="/wallet-2.svg" />
                     </div>
                 </div>
