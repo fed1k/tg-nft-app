@@ -155,13 +155,14 @@ const Home = () => {
                 <div className='py-5 shrink-0 w-[174px] px-4 rounded-[20px] bg-[#F5F7FB]'>
                     <p className='text-sm'>Wallet Balance</p>
                     <div className='flex pt-2 items-center justify-between'>
-                        {walletConnected ? (
+                        {/* {walletConnected ? (
                             <p className='font-semibold text-lg'>
                                 {tonAddress ? 'TON' : 'EVM'}
                             </p>
                         ) : (
                             <p className='font-semibold text-sm text-[#666F8B]'>—</p>
-                        )}
+                        )} */}
+                        <p className='font-semibold text-2xl'>{tonBalanceTon} <span className='text-sm font-normal'>TON</span></p>
                         <img className='w-4 h-4' alt="" src="/wallet-2.svg" />
                     </div>
                 </div>
@@ -343,7 +344,35 @@ const Home = () => {
                                 </div>
                                 <div className="pr-[5px] text-right">
                                     <p className="text-[10px] text-[#6B6AFD] font-medium">{tx.amount}</p>
-                                    <p className="text-end text-[8px] text-[#666F8B]">{tx.feeLabel}</p>
+                                    <p className="text-end text-[8px] text-[#666F8B]">
+                                        {(() => {
+                                            const amountStr = tx.amount.toLowerCase();
+                                            let tonValue = NaN;
+
+                                            // 1. Try to extract TON value directly (e.g., "0.5 TON" or "≈ 0.040 TON")
+                                            const tonMatch = tx.amount.match(/(?:≈\s*)?([0-9.]+)\s*TON/i);
+                                            if (tonMatch) {
+                                                tonValue = parseFloat(tonMatch[1]);
+                                            } 
+                                            // 2. Fallback: Extract Stars and convert to TON (100k Stars = 1 TON)
+                                            else if (amountStr.includes('stars')) {
+                                                const starsMatch = tx.amount.match(/([0-9,.]+)\s*stars/i);
+                                                if (starsMatch) {
+                                                    const stars = parseFloat(starsMatch[1].replace(/,/g, ''));
+                                                    tonValue = stars / 100000;
+                                                }
+                                            }
+                                            // 3. Generic fallback for amounts without unit (assume TON)
+                                            else if (!amountStr.includes('gift')) {
+                                                tonValue = parseFloat(tx.amount.replace(/[^0-9.]/g, ''));
+                                            }
+
+                                            if (!isNaN(tonValue) && tonUsdPrice > 0) {
+                                                return `$${(tonValue * tonUsdPrice).toFixed(2)}`;
+                                            }
+                                            return tx.feeLabel;
+                                        })()}
+                                    </p>
                                 </div>
                             </div>
                         ))

@@ -526,7 +526,7 @@ const Mint = () => {
 
     // ─────────────────────────────────────────────────────────────────────────
     return (
-        <div className={`px-5 pb-${isInTelegram ? '10' : '30'}`}>
+        <div className={`px-5 pb-${isInTelegram ? '30' : '30'}`}>
 
             {/* No collection — full-screen prompt matching app design */}
             {!COLLECTION_ADDRESS && (
