@@ -42,8 +42,10 @@ export default function AdminAccess() {
           navigate('/admin/view', { replace: true })
           return
         }
-      } catch {
-        // fall through to error message
+      } catch (err: any) {
+        const msg = err?.message || 'Failed to verify admin access'
+        webApp?.showAlert?.(msg) ?? window.alert(msg)
+        return
       } finally {
         setChecking(false)
       }

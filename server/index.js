@@ -1231,19 +1231,23 @@ async function adminAuthMiddleware(req, res, next) {
   
   const initData = req.headers['x-telegram-init-data'] || req.body?.initData || req.query?.initData
   if (!initData) {
+    console.warn(`[admin-auth] [${req._rid}] Missing initData`)
     return res.status(401).json({ message: 'Admin authentication required (initData missing)' })
   }
+
+  console.log(`[admin-auth] [${req._rid}] Received initData length: ${initData.length}`)
 
   try {
     const { telegramUserId, user } = validateTelegramWebAppInitData(initData, TELEGRAM_BOT_TOKEN)
     const access = await resolveAdminAccess(telegramUserId, user.username)
     if (!access.authorized) {
-      console.warn(`[admin-auth] Unauthorized attempt by tgId=${telegramUserId} user=${user.username}`)
+      console.warn(`[admin-auth] [${req._rid}] Unauthorized attempt by tgId=${telegramUserId} user=${user.username}`)
       return res.status(403).json({ message: 'Forbidden: You do not have admin privileges' })
     }
     req._adminId = telegramUserId
     next()
   } catch (err) {
+    console.error(`[admin-auth] [${req._rid}] Validation failed: ${err.message}`)
     return res.status(err.statusCode || 401).json({ message: err.message })
   }
 }
@@ -3393,6 +3397,8 @@ const isDirectRun = isPm2 || entryPath === scriptPath || (process.argv[1] && scr
 if (isDirectRun) {
   console.log('Starting Admin API (Direct/PM2)...')
   console.log('MONGODB_URI length:', MONGODB_URI?.length || 0)
+  const botIdHint = TELEGRAM_BOT_TOKEN?.includes(':') ? TELEGRAM_BOT_TOKEN.split(':')[0] : 'not-set'
+  console.log('TELEGRAM_BOT_TOKEN botId:', botIdHint)
 
   ensureMongo()
     .then(() => {
