@@ -619,10 +619,29 @@ function assertUserCanUsePlatform(user) {
 function identityFromReq(req) {
   const q = req.query || {}
   const b = req.body || {}
+  const initData = req.headers['x-telegram-init-data'] || b.initData || q.initData
+
+  let verifiedTgId = null
+  let verifiedUsername = null
+
+  if (initData) {
+    try {
+      const { telegramUserId, user } = validateTelegramWebAppInitData(initData, TELEGRAM_BOT_TOKEN)
+      verifiedTgId = telegramUserId
+      verifiedUsername = user.username
+    } catch (err) {
+      // If they provided initData but it's invalid, we should fail.
+      const e = new Error(err.message || 'Invalid initData')
+      e.statusCode = 401
+      throw e
+    }
+  }
+
   return {
-    username: q.username ?? b.username,
-    telegramId: q.telegramId ?? b.telegramId,
-    walletAddress: q.walletAddress ?? b.walletAddress,
+    username: verifiedUsername || sanitizeUsername(q.username || b.username),
+    telegramId: verifiedTgId || Number(q.telegramId || b.telegramId) || null,
+    walletAddress: String(q.walletAddress || b.walletAddress || '').trim(),
+    isVerified: !!verifiedTgId,
   }
 }
 
@@ -1113,6 +1132,124 @@ async function resolveOrCreateActorUser(payload = {}) {
   return user
 }
 
+function validateTelegramWebAppInitData(initData, botToken, maxAgeSec = 86400) {
+  const raw = String(initData || '').trim()
+  const tok = String(botToken || '').trim()
+  if (!raw || !tok) {
+    const err = new Error('Missing initData or bot token')
+    err.statusCode = 400
+    throw err
+  }
+
+  const incoming = new URLSearchParams(raw)
+  const hash = incoming.get('hash')
+  if (!hash) {
+    const err = new Error('Missing hash in initData')
+    err.statusCode = 401
+    throw err
+  }
+
+  const tryBuildCheckString = (excludeSignature) => {
+    const p = new URLSearchParams(raw)
+    p.delete('hash')
+    if (excludeSignature) p.delete('signature')
+    return [...p.keys()]
+      .sort()
+      .map((k) => `${k}=${p.get(k)}`)
+      .join('\n')
+  }
+
+  const verifyDataCheckString = (dataCheckString) => {
+    const secretKey = createHmac('sha256', 'WebAppData').update(tok).digest()
+    const computed = createHmac('sha256', secretKey).update(dataCheckString).digest('hex')
+    try {
+      const a = Buffer.from(computed, 'hex')
+      const b = Buffer.from(hash, 'hex')
+      return a.length === b.length && timingSafeEqual(a, b)
+    } catch {
+      return false
+    }
+  }
+
+  // Newer Telegram sends `signature` (Ed25519). Legacy `hash` is HMAC over fields that must not include `signature`.
+  let dataCheckString = tryBuildCheckString(true)
+  let valid = verifyDataCheckString(dataCheckString)
+  if (!valid && incoming.has('signature')) {
+    dataCheckString = tryBuildCheckString(false)
+    valid = verifyDataCheckString(dataCheckString)
+  }
+
+  if (!valid) {
+    const botIdHint = tok.includes(':') ? tok.split(':')[0] : 'unknown'
+    const err = new Error(
+      `Invalid initData signature. Fix: (1) Set TELEGRAM_BOT_TOKEN on THIS API server to the SAME bot that opens the Mini App (bot id in token: ${botIdHint}). ` +
+        `(2) Point VITE_USER_API_URL to your API host, or rely on built-in defaults. ` +
+        `(3) If bot id above is NOT your Mini App bot: remove stray TELEGRAM_BOT_TOKEN on this host, or set EMBEDDED_TELEGRAM_BOT_TOKEN in server/giftedforgeDeploy.js (embedded wins when set). ` +
+        `(4) Redeploy frontend after changing VITE_* env vars.`,
+    )
+    err.statusCode = 401
+    throw err
+  }
+
+  const params = new URLSearchParams(raw)
+  const authDate = Number(params.get('auth_date'))
+  if (!Number.isFinite(authDate) || authDate <= 0) {
+    const err = new Error('Invalid auth_date in initData')
+    err.statusCode = 401
+    throw err
+  }
+  if (Date.now() / 1000 - authDate > maxAgeSec) {
+    const err = new Error('initData expired — reopen the Mini App from Telegram')
+    err.statusCode = 401
+    throw err
+  }
+  const userJson = params.get('user')
+  if (!userJson) {
+    const err = new Error('Missing user in initData')
+    err.statusCode = 401
+    throw err
+  }
+  let user
+  try {
+    user = JSON.parse(userJson)
+  } catch {
+    const err = new Error('Invalid user in initData')
+    err.statusCode = 401
+    throw err
+  }
+  const telegramUserId = Number(user.id)
+  if (!Number.isFinite(telegramUserId) || telegramUserId <= 0) {
+    const err = new Error('Invalid user id in initData')
+    err.statusCode = 401
+    throw err
+  }
+  return { telegramUserId, user }
+}
+
+async function adminAuthMiddleware(req, res, next) {
+  if (req.path === '/health') return next()
+  
+  const initData = req.headers['x-telegram-init-data'] || req.body?.initData || req.query?.initData
+  if (!initData) {
+    return res.status(401).json({ message: 'Admin authentication required (initData missing)' })
+  }
+
+  try {
+    const { telegramUserId, user } = validateTelegramWebAppInitData(initData, TELEGRAM_BOT_TOKEN)
+    const access = await resolveAdminAccess(telegramUserId, user.username)
+    if (!access.authorized) {
+      console.warn(`[admin-auth] Unauthorized attempt by tgId=${telegramUserId} user=${user.username}`)
+      return res.status(403).json({ message: 'Forbidden: You do not have admin privileges' })
+    }
+    req._adminId = telegramUserId
+    next()
+  } catch (err) {
+    return res.status(err.statusCode || 401).json({ message: err.message })
+  }
+}
+
+app.use('/api/admin', adminAuthMiddleware)
+
 app.get('/api/admin/health', async (_req, res) => {
   const users = await AdminUser.countDocuments()
   res.json({ ok: true, users })
@@ -1371,20 +1508,36 @@ app.patch('/api/admin/settings', async (req, res) => {
   })
 })
 
-/** Block banned/suspended users on all user APIs (except public platform-settings). */
+/** Block banned/suspended users and enforce initData for sensitive actions. */
 app.use('/api/user', async (req, res, next) => {
-  if (req.method === 'GET' && req.path === '/platform-settings') return next()
-  if (req.method === 'POST' && req.path === '/session') return next()
+  const publicGetPaths = ['/market', '/nfts', '/gift-listings', '/platform-settings', '/health']
+  const isPublicGet =
+    req.method === 'GET' && (publicGetPaths.includes(req.path) || req.path.startsWith('/assets/'))
+  const isSharedCollectionView =
+    req.method === 'GET' && (req.path === '/home' || req.path === '/profile')
+
+  const needsVerification = !isPublicGet && !isSharedCollectionView
+
   try {
     const id = identityFromReq(req)
+
+    if (needsVerification && !id.isVerified) {
+      return res.status(401).json({
+        code: 'AUTH_REQUIRED',
+        message: 'Authentication required (open the app from Telegram)',
+      })
+    }
+
     const user = await findPanelUser(id.username, id.telegramId, id.walletAddress)
     if (user) assertUserCanUsePlatform(user)
+
     req._panelUser = user
+    req._isVerified = id.isVerified
     return next()
   } catch (err) {
     const statusCode = err?.statusCode && Number.isInteger(err.statusCode) ? err.statusCode : 403
     return res.status(statusCode).json({
-      code: err.code || userBlockPayload(err.userStatus).code,
+      code: err.code || (err.userStatus ? userBlockPayload(err.userStatus).code : 'AUTH_ERROR'),
       message: err.message || 'Access denied',
       status: err.userStatus,
     })
@@ -1421,104 +1574,6 @@ async function tgApi(method, body) {
     throw err
   }
   return data.result
-}
-
-/**
- * Validates Telegram Mini App `initData` (https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app).
- * @returns {{ telegramUserId: number, user: Record<string, unknown> }}
- */
-function validateTelegramWebAppInitData(initData, botToken, maxAgeSec = 86400) {
-  const raw = String(initData || '').trim()
-  const tok = String(botToken || '').trim()
-  if (!raw || !tok) {
-    const err = new Error('Missing initData or bot token')
-    err.statusCode = 400
-    throw err
-  }
-
-  const incoming = new URLSearchParams(raw)
-  const hash = incoming.get('hash')
-  if (!hash) {
-    const err = new Error('Missing hash in initData')
-    err.statusCode = 401
-    throw err
-  }
-
-  const tryBuildCheckString = (excludeSignature) => {
-    const p = new URLSearchParams(raw)
-    p.delete('hash')
-    if (excludeSignature) p.delete('signature')
-    return [...p.keys()]
-      .sort()
-      .map((k) => `${k}=${p.get(k)}`)
-      .join('\n')
-  }
-
-  const verifyDataCheckString = (dataCheckString) => {
-    const secretKey = createHmac('sha256', 'WebAppData').update(tok).digest()
-    const computed = createHmac('sha256', secretKey).update(dataCheckString).digest('hex')
-    try {
-      const a = Buffer.from(computed, 'hex')
-      const b = Buffer.from(hash, 'hex')
-      return a.length === b.length && timingSafeEqual(a, b)
-    } catch {
-      return false
-    }
-  }
-
-  // Newer Telegram sends `signature` (Ed25519). Legacy `hash` is HMAC over fields that must not include `signature`.
-  let dataCheckString = tryBuildCheckString(true)
-  let valid = verifyDataCheckString(dataCheckString)
-  if (!valid && incoming.has('signature')) {
-    dataCheckString = tryBuildCheckString(false)
-    valid = verifyDataCheckString(dataCheckString)
-  }
-
-  if (!valid) {
-    const botIdHint = tok.includes(':') ? tok.split(':')[0] : 'unknown'
-    const err = new Error(
-      `Invalid initData signature. Fix: (1) Set TELEGRAM_BOT_TOKEN on THIS API server to the SAME bot that opens the Mini App (bot id in token: ${botIdHint}). ` +
-        `(2) Point VITE_USER_API_URL to your API host, or rely on built-in defaults. ` +
-        `(3) If bot id above is NOT your Mini App bot: remove stray TELEGRAM_BOT_TOKEN on this host, or set EMBEDDED_TELEGRAM_BOT_TOKEN in server/giftedforgeDeploy.js (embedded wins when set). ` +
-        `(4) Redeploy frontend after changing VITE_* env vars.`,
-    )
-    err.statusCode = 401
-    throw err
-  }
-
-  const params = new URLSearchParams(raw)
-  const authDate = Number(params.get('auth_date'))
-  if (!Number.isFinite(authDate) || authDate <= 0) {
-    const err = new Error('Invalid auth_date in initData')
-    err.statusCode = 401
-    throw err
-  }
-  if (Date.now() / 1000 - authDate > maxAgeSec) {
-    const err = new Error('initData expired — reopen the Mini App from Telegram')
-    err.statusCode = 401
-    throw err
-  }
-  const userJson = params.get('user')
-  if (!userJson) {
-    const err = new Error('Missing user in initData')
-    err.statusCode = 401
-    throw err
-  }
-  let user
-  try {
-    user = JSON.parse(userJson)
-  } catch {
-    const err = new Error('Invalid user in initData')
-    err.statusCode = 401
-    throw err
-  }
-  const telegramUserId = Number(user.id)
-  if (!Number.isFinite(telegramUserId) || telegramUserId <= 0) {
-    const err = new Error('Invalid user id in initData')
-    err.statusCode = 401
-    throw err
-  }
-  return { telegramUserId, user }
 }
 
 function mapSenderUser(u) {

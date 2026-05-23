@@ -188,9 +188,20 @@ async function parseJsonBody(res: Response): Promise<Record<string, unknown>> {
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  
+  const initData = (window as any).Telegram?.WebApp?.initData || ''
+
   let res: Response
   try {
-    res = await fetch(`${API_BASE}${path}`, { ...init, signal: controller.signal })
+    res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': initData,
+        ...(init?.headers || {}),
+      },
+    })
   } catch (err: any) {
     clearTimeout(timeout)
     if (err?.name === 'AbortError') {
@@ -213,9 +224,20 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 async function apiRoot<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  
+  const initData = (window as any).Telegram?.WebApp?.initData || ''
+
   let res: Response
   try {
-    res = await fetch(`${ROOT_BASE}${path}`, { ...init, signal: controller.signal })
+    res = await fetch(`${ROOT_BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': initData,
+        ...(init?.headers || {}),
+      },
+    })
   } catch (err: any) {
     clearTimeout(timeout)
     if (err?.name === 'AbortError') {
