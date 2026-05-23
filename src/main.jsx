@@ -31,6 +31,7 @@ import Profile from './pages/Profile.tsx'
 import Swap from './pages/Swap.tsx'
 import Detail from './pages/Detail.tsx'
 import MyCollection from './pages/MyCollection.tsx'
+import PublicCollection from './pages/PublicCollection.tsx'
 import Offers from './pages/Offers.tsx'
 import Favorites from './pages/Favorites.tsx'
 import Gifts from './pages/Gifts.tsx'
@@ -135,6 +136,7 @@ const router = createBrowserRouter([
       { path: 'mint', element: <Mint /> },
       { path: 'market', element: <Market /> },
       { path: 'my-collection', element: <MyCollection /> },
+      { path: 'collection/:id', element: <PublicCollection /> },
       { path: 'favorites', element: <Favorites /> },
       { path: 'gifts', element: <Gifts /> },
       { path: 'profile', element: <Profile /> },

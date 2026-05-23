@@ -23,7 +23,18 @@ const Splash = () => {
         }
     }
 
-    const handleContinueWithTelegram = () => void enterApp('/app/home')
+    const handleContinueWithTelegram = () => {
+        const startParam = webApp?.initDataUnsafe?.start_param
+        if (startParam?.startsWith('col_')) {
+            const id = startParam.substring(4)
+            return void enterApp(`/app/collection/${id}`)
+        }
+        if (startParam?.startsWith('collectible_')) {
+            const id = startParam.substring(12)
+            return void enterApp(`/asset/${id}`)
+        }
+        void enterApp('/app/home')
+    }
 
     const handleCreateWallet = () => void enterApp('/app/wallet')
 

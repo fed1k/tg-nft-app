@@ -306,21 +306,39 @@ const Profile = () => {
                 {/* Content */}
                 <div className="pt-12">
                     <p className="text-[#0E0636] font-semibold text-xl">Content</p>
-                    <div>
-                        <button
-                            type="button"
-                            onClick={() => navigate('/app/my-collection')}
-                            className="gap-2.5 flex w-full text-left items-center mt-6 border border-[#666F8B33] rounded-2xl py-3 px-[13px] cursor-pointer hover:bg-[#6B6AFD0D] transition-colors bg-transparent"
-                        >
-                            <div className="w-9 h-9 border border-[#666F8B33] flex items-center justify-center rounded-lg">
-                                <img className="w-5 h-5 rounded-lg" src="/gallery.svg" alt="" />
-                            </div>
-                            <div className="flex-1">
-                                <p className="text-xs font-medium text-[#666F8B]">My Collections</p>
-                                <p className="text-[10px] text-[#666F8B] pt-0.5">View and manage collections</p>
-                            </div>
-                            <img className="w-4 h-4" src="/arrow-right.svg" alt="" />
-                        </button>
+                    <div className="flex flex-col gap-3 mt-6">
+                        <div className="border border-[#666F8B33] rounded-2xl p-3 bg-transparent hover:bg-[#6B6AFD0D] transition-colors">
+                            <button
+                                type="button"
+                                onClick={() => navigate('/app/my-collection')}
+                                className="gap-2.5 flex w-full text-left items-center cursor-pointer bg-transparent border-0 p-0"
+                            >
+                                <div className="w-9 h-9 border border-[#666F8B33] flex items-center justify-center rounded-lg">
+                                    <img className="w-5 h-5 rounded-lg" src="/gallery.svg" alt="" />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-xs font-medium text-[#666F8B]">My Collections</p>
+                                    <p className="text-[10px] text-[#666F8B] pt-0.5">View and manage collections</p>
+                                </div>
+                                <img className="w-4 h-4" src="/arrow-right.svg" alt="" />
+                            </button>
+                            
+                            {user?.id && (
+                                <div className="mt-3 pt-3 border-t border-[#666F8B1A] flex gap-2">
+                                    <button
+                                        onClick={() => {
+                                            const link = appDeepLinkBase 
+                                                ? `${appDeepLinkBase}${appDeepLinkBase.includes('?') ? '&' : '?'}startapp=col_${user.id}`
+                                                : `${window.location.origin}/app/collection/${user.id}`
+                                            copyToClipboard(link)
+                                        }}
+                                        className="flex-1 py-1.5 text-[10px] font-semibold text-[#6B6AFD] bg-[#6B6AFD14] rounded-lg"
+                                    >
+                                        Share Collection Link
+                                    </button>
+                                </div>
+                            )}
+                        </div>
 
                         <button
                             type="button"
