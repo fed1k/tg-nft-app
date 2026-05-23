@@ -1227,11 +1227,11 @@ function validateTelegramWebAppInitData(initData, botToken, maxAgeSec = 86400) {
 }
 
 async function adminAuthMiddleware(req, res, next) {
-  if (req.path === '/health') return next()
+  if (req.path === '/health' || req.path === '/access-check') return next()
   
   const initData = req.headers['x-telegram-init-data'] || req.body?.initData || req.query?.initData
   if (!initData) {
-    console.warn(`[admin-auth] [${req._rid}] Missing initData`)
+    console.warn(`[admin-auth] [${req._rid}] Missing initData. Path: ${req.path}. Headers:`, JSON.stringify(req.headers))
     return res.status(401).json({ message: 'Admin authentication required (initData missing)' })
   }
 

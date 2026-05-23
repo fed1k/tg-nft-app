@@ -20,10 +20,14 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
   const initData = (window as any).Telegram?.WebApp?.initData || ''
+  const url = new URL(`${API_BASE}${path}`)
+  if (initData) {
+    url.searchParams.set('initData', initData)
+  }
 
   let res: Response
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetch(url.toString(), {
       ...init,
       signal: controller.signal,
       headers: {
