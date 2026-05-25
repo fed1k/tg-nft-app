@@ -5,7 +5,6 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import express from 'express'
 import cors from 'cors'
 import mongoose from 'mongoose'
-import {Telegraf, Markup } from 'telegraf'
 import {
   EMBEDDED_TELEGRAM_BOT_TOKEN,
   GIFTEDFORGE_FRONTEND_ORIGIN,
@@ -13,7 +12,6 @@ import {
 } from './giftedforgeDeploy.js'
 
 const app = express()
-const CHANNEL_URL = "https://t.me/official_giftedforge";
 
 const PORT = Number(process.env.ADMIN_API_PORT || 4000)
 const MONGODB_URI = process.env.MONGODB_URI?.trim()?.replace(/^['"]|['"]$/g, '')
@@ -60,36 +58,6 @@ const _envTok = String(process.env.TELEGRAM_BOT_TOKEN || '')
 const TELEGRAM_BOT_TOKEN =
   _embedTok.length > 15 && _embedTok.includes(':') ? _embedTok : _envTok || _embedTok
 const TELEGRAM_WEBHOOK_SECRET = String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim()
-
-
-const bot = new Telegraf(TELEGRAM_BOT_TOKEN);
-
-bot.start(async (ctx) => {
-  await ctx.reply(
-    "Welcome to GiftedForge, a platform where talents, customers and digital collections meet instantly.\n\nHere your NFT/Gifts can become collectible.",
-    Markup.inlineKeyboard([
-      [Markup.button.url('Open GiftedForge', ENV_CLIENT_ORIGINS)],
-      [Markup.button.url('Join the GiftedForge channel', CHANNEL_URL)],
-    ])
-  );
-});
-
-bot.on('text', async (ctx) => {
-  try {
-    await ctx.deleteMessage();
-  } catch (error) {
-    console.error("Error in deleteMessage:", error);
-  }
-
-  await ctx.reply(
-    "Welcome to GiftedForge, a platform where talents, customers and digital collections meet instantly.\n\nHere your NFT/Gifts can become collectible.",
-    Markup.inlineKeyboard([
-      [Markup.button.url('Open GiftedForge', ENV_CLIENT_ORIGINS)],
-      [Markup.button.url('Join the GiftedForge channel', CHANNEL_URL)],
-    ])
-  );
-});
-
 
 if (!MONGODB_URI) {
   // Hard-stop so panel never silently falls back to fake data.
@@ -1260,7 +1228,7 @@ function validateTelegramWebAppInitData(initData, botToken, maxAgeSec = 86400) {
 
 async function adminAuthMiddleware(req, res, next) {
   if (req.path === '/health' || req.path === '/access-check') return next()
-
+  
   const initData = req.headers['x-telegram-init-data'] || req.body?.initData || req.query?.initData
   if (!initData) {
     console.warn(`[admin-auth] [${req._rid}] Missing initData. Path: ${req.path}. Headers:`, JSON.stringify(req.headers))
@@ -2540,7 +2508,7 @@ app.post('/api/telegram/webhook', async (req, res) => {
   }
 
   const msg = update?.message || update?.edited_message
-
+  
   if (msg?.text && !msg.successful_payment) {
     const chatId = msg.chat.id
     try {
@@ -3421,7 +3389,7 @@ export default async function handler(req, res) {
 const scriptPath = fileURLToPath(import.meta.url)
 const entryPath = process.argv[1] ? (process.argv[1].startsWith('/') ? process.argv[1] : fileURLToPath(new URL(process.argv[1], 'file://' + process.cwd() + '/'))) : null
 
-// PM2 wraps execution in ProcessContainerFork.js.
+// PM2 wraps execution in ProcessContainerFork.js. 
 // We consider it a direct run if it's the main module OR if running under PM2.
 const isPm2 = process.env.PM2_HOME || process.env.PM2_ID !== undefined || (entryPath && entryPath.includes('ProcessContainerFork'))
 const isDirectRun = isPm2 || entryPath === scriptPath || (process.argv[1] && scriptPath.endsWith(process.argv[1]))
@@ -3434,20 +3402,6 @@ if (isDirectRun) {
 
   ensureMongo()
     .then(() => {
-      await bot.telegram.setChatMenuButton({
-        menuButton: {
-          type: 'web_app',
-          text: 'Открыть',
-          web_app: { url: ENV_CLIENT_ORIGINS }
-        }
-      }).catch(() => {
-        // web_app bo'lmasa oddiy default qoladi — xato chiqarmaydi
-      });
-
-      // Long polling bilan ishga tushirish
-      await bot.launch();
-
-
       console.log('MongoDB connected successfully')
       setInterval(() => {
         void runPendingMintSyncJob()
