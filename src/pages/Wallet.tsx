@@ -776,7 +776,13 @@ const Wallet = () => {
             )}
 
             {/* ═══════════ DEPOSIT MODAL ═══════════ */}
-            <Modal className="bottom-0 absolute w-screen m-0 rounded-b-none" position="bottom" isOpen={depositModalOpen} onClose={() => setDepositModalOpen(false)}>
+            <Modal 
+                className="bottom-0 absolute w-screen m-0 rounded-b-none" 
+                position="bottom" 
+                animation="slide-up"
+                isOpen={depositModalOpen} 
+                onClose={() => setDepositModalOpen(false)}
+            >
                 <h2 className="text-center font-semibold text-xl text-[#0E0636]">Deposit</h2>
                 <p className="pt-3 text-[#666F8B] mx-auto text-center text-sm max-w-[280px]">
                     Scan or copy your {activeTab} address to receive funds.
@@ -812,7 +818,13 @@ const Wallet = () => {
             </Modal>
 
             {/* ═══════════ WITHDRAW MODAL ═══════════ */}
-            <Modal className="bottom-0 absolute w-screen m-0 rounded-b-none" position="bottom" isOpen={withdrawModalOpen} onClose={() => setWithdrawModalOpen(false)}>
+            <Modal 
+                className="bottom-0 absolute w-screen m-0 rounded-b-none" 
+                position="bottom" 
+                animation="slide-up"
+                isOpen={withdrawModalOpen} 
+                onClose={() => setWithdrawModalOpen(false)}
+            >
                 <h2 className="text-center font-semibold text-xl text-[#0E0636]">Withdraw</h2>
                 <p className="pt-3 pb-6 text-[#666F8B] mx-auto text-center text-sm">
                     Send {activeTab === 'TON' ? 'TON' : evmBalance?.symbol ?? 'ETH'} to any wallet address.
@@ -924,7 +936,13 @@ const Wallet = () => {
             </Modal>
 
             {/* ═══════════ DEPLOY COLLECTION MODAL ═══════════ */}
-            <Modal className="bottom-0 absolute w-screen m-0 rounded-b-none" position="bottom" isOpen={deployCollectionModal} onClose={() => setDeployCollectionModal(false)}>
+            <Modal 
+                className="bottom-0 absolute w-screen m-0 rounded-b-none" 
+                position="bottom" 
+                animation="slide-up"
+                isOpen={deployCollectionModal} 
+                onClose={() => setDeployCollectionModal(false)}
+            >
                 <h2 className="text-center font-semibold text-xl text-[#0E0636]">Deploy NFT Collection</h2>
                 <p className="pt-2 pb-5 text-[#666F8B] text-center text-xs">
                     Your collection contract will be deployed on TON {meta.env?.VITE_TON_NETWORK === 'testnet' ? 'Testnet' : 'Mainnet'}.

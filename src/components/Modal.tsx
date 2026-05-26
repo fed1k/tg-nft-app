@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 interface ModalProps {
@@ -28,6 +28,22 @@ export default function Modal({
   contentClassName = '',
   showCloseButton = true,
 }: ModalProps) {
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [isAnimated, setIsAnimated] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      // Small delay to ensure browser paints before adding animation classes
+      const timeout = setTimeout(() => setIsAnimated(true), 10);
+      return () => clearTimeout(timeout);
+    } else {
+      setIsAnimated(false);
+      const timeout = setTimeout(() => setShouldRender(false), 300); // match duration-300
+      return () => clearTimeout(timeout);
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
 
@@ -42,34 +58,32 @@ export default function Modal({
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
-
+  if (!shouldRender) return null;
 
   // Position & Animation Classes
   const positionClasses = {
     center: 'items-center',
     top: 'items-start pt-10',
-    bottom: 'items-end pb-10',
+    bottom: 'items-end', // Removed pb-10 to allow absolute bottom-0 to work better
   };
 
   const animationClasses = {
-    scale: 'scale-95',
-    'slide-down': 'translate-y-[-20px]',
-    'slide-up': 'translate-y-8',
+    scale: 'opacity-0 scale-95',
+    'slide-down': 'opacity-0 -translate-y-full',
+    'slide-up': 'opacity-0 translate-y-full',
   };
 
   const openAnimation = {
-    scale: 'scale-100',
-    'slide-down': 'translate-y-0',
-    'slide-up': 'translate-y-0',
+    scale: 'opacity-100 scale-100',
+    'slide-down': 'opacity-100 translate-y-0',
+    'slide-up': 'opacity-100 translate-y-0',
   };
 
   return createPortal(
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/60 z-50"
+        className={`fixed inset-0 bg-black/60 z-50 transition-opacity duration-300 ease-out ${isAnimated ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}
       />
 
@@ -81,7 +95,7 @@ export default function Modal({
         <div
           className={`bg-white rounded-3xl shadow-2xl w-full  
             transition-all duration-300 ease-out ${animationClasses[animation]} 
-            ${isOpen ? openAnimation[animation] : ''} ${className}`}
+            ${isAnimated ? openAnimation[animation] : ''} ${className}`}
           onClick={(e) => e.stopPropagation()}
         >
 
