@@ -219,20 +219,19 @@ const Home = () => {
                                 <div className="flex gap-2 pt-3 overflow-x-auto pb-1">
                                     {giftsQuery.data!.gifts.slice(0, 8).map((g, i) => (
                                         <div
-                                            key={`${g.kind}-${
-                                                'ownedGiftId' in g && g.ownedGiftId
-                                                    ? g.ownedGiftId
-                                                    : 'giftId' in g && g.giftId
-                                                      ? g.giftId
-                                                      : i
-                                            }`}
+                                            key={`${g.kind}-${'ownedGiftId' in g && g.ownedGiftId
+                                                ? g.ownedGiftId
+                                                : 'giftId' in g && g.giftId
+                                                    ? g.giftId
+                                                    : i
+                                                }`}
                                             className="shrink-0 w-11 h-11 rounded-2xl bg-white flex items-center justify-center text-xl border border-[#0E06361A]"
                                             title={
                                                 g.kind === 'unique' && 'name' in g && g.name
                                                     ? String(g.name)
                                                     : g.kind === 'regular' && g.text
-                                                      ? g.text
-                                                      : 'Gift'
+                                                        ? g.text
+                                                        : 'Gift'
                                             }
                                         >
                                             {g.kind === 'unknown' ? '🎁' : 'emoji' in g ? g.emoji : '🎁'}
@@ -317,7 +316,15 @@ const Home = () => {
                     ))}
                 </div>
             ) : (
-                <p className="text-sm text-[#666F8B] px-3">No NFTs in your collection yet. Mint one to see it here.</p>
+                <div className='bg-[#F5F7FB] mx-3 gap-3 flex flex-col items-center rounded-[20px] py-6'>
+                    <img src="/nocollection.svg" className='w-12 h-12' alt="" />
+                    <div className='text-center'>
+                        <p className='font-semibold text-[#666F8B] text-xs'>No Collections Yet</p>
+                        <p className="text-[10px] w-[239px] text-[#666F8B] pt-2">You haven’t created any collections so far. Start organizing your items by creating your first
+                            collection now.</p>
+                    </div>
+                    <button className='rounded-lg border border-[#666F8B33] w-[214px] font-medium text-xs h-10 text-[#666F8B]'>Create Your First Collection</button>
+                </div>
             )}
 
             {/* Recent Activity */}
@@ -329,7 +336,14 @@ const Home = () => {
                     ) : isError ? (
                         <p className="text-sm text-[#DA0909] text-center py-4">Failed to load activity.</p>
                     ) : recentActivity.length === 0 ? (
-                        <p className="text-sm text-[#666F8B] text-center py-4">No activity yet.</p>
+                        <div className='bg-[#F5F7FB] mx-3 gap-3 flex flex-col items-center rounded-[20px] py-2'>
+                            <img src="/transaction.svg" className='w-12 h-12' alt="" />
+                            <div className='text-center'>
+                                <p className='font-semibold text-[#666F8B] text-xs'>No Recent Activity</p>
+                                <p className="text-[10px] w-[239px] text-[#666F8B] pt-2">Looks like there’s nothing here yet. Your transactions and activity will appear once you get started.</p>
+                            </div>
+                            <button className='rounded-lg border border-[#666F8B33] w-[214px] font-medium text-xs h-10 text-[#666F8B]'>Make Your First Transaction</button>
+                        </div>
                     ) : (
                         recentActivity.slice(0, 6).map((tx) => (
                             <div key={tx.id} className="bg-white p-1.5 rounded-xl flex justify-between items-center">
@@ -353,7 +367,7 @@ const Home = () => {
                                             const tonMatch = tx.amount.match(/(?:≈\s*)?([0-9.]+)\s*TON/i);
                                             if (tonMatch) {
                                                 tonValue = parseFloat(tonMatch[1]);
-                                            } 
+                                            }
                                             // 2. Fallback: Extract Stars and convert to TON (100k Stars = 1 TON)
                                             else if (amountStr.includes('stars')) {
                                                 const starsMatch = tx.amount.match(/([0-9,.]+)\s*stars/i);

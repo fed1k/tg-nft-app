@@ -52,10 +52,12 @@ const Splash = () => {
         <div className='bg-[#0E0636] min-h-screen'>
             <div className='max-w-[393px] mx-auto'>
                 <div className='flex overflow-x-hidden relative pt-12'>
-                    <img className='w-[195px] h-[240px] border border-white absolute -left-[122px] rounded-[48px]' src="/splash-star.png" alt="" />
-                    <img className='w-[229px] h-[283px] border mt-5 translate-x-[82px] border-white rounded-[48px]' src="/splash-bear.png" alt="" />
+                    <img className='w-[195px] h-[240px] border border-white absolute -left-[122px] rounded-[48px]' src="/bear.jpg" alt="" />
+                    <img className='w-[195px] h-[240px] border border-white absolute -left-[122px] rounded-[48px]' src="/heart-splash.jpg" alt="" />
+                    <img className='w-[195px] h-[240px] border border-white absolute -left-[122px] rounded-[48px]' src="/headphone-skull.png" alt="" />
+                    <img className='w-[229px] h-[283px] border mt-5 translate-x-[82px] border-white rounded-[48px]' src="/weard-head.png" alt="" />
                     <div className='border-white border absolute -right-[125px] w-[195px] h-[240px] rounded-[48px]'>
-                        <img className='w-[195px] scale-x-200 h-[240px]' src="/splash-heart.png" alt="" />
+                        <img className='w-[195px] scale-x-200 h-[240px]' src="/coin.jpg" alt="" />
                     </div>
                 </div>
 
@@ -79,7 +81,7 @@ const Splash = () => {
                         className='border border-white mt-12 rounded-lg w-full h-11 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-white/10 transition-colors disabled:opacity-50'
                     >
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.17 13.63l-2.965-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.983.929z"/>
+                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.17 13.63l-2.965-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.983.929z" />
                         </svg>
                         {checking ? 'Checking…' : isInTelegram ? 'Continue with Telegram' : 'Open App'}
                     </button>
@@ -108,11 +110,6 @@ const Splash = () => {
                     <img src="/security-safe.svg" className='w-3.5 h-3.5' alt="" />
                     <p className='text-xs'>Admin Access</p>
                 </button>
-
-                <div className='flex justify-center pt-4 items-center pb-[25px] gap-1'>
-                    <img src="/security-safe.svg" className='w-3.5 h-3.5' alt="" />
-                    <p className='text-white text-xs'>Secured & Non-Custodial</p>
-                </div>
             </div>
         </div>
     )
