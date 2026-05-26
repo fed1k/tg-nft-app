@@ -62,9 +62,9 @@ export default function Modal({
 
   // Position & Animation Classes
   const positionClasses = {
-    center: 'items-center',
-    top: 'items-start pt-10',
-    bottom: 'items-end', // Removed pb-10 to allow absolute bottom-0 to work better
+    center: 'items-center p-4',
+    top: 'items-start pt-10 px-4',
+    bottom: 'items-end', 
   };
 
   const animationClasses = {
@@ -89,13 +89,13 @@ export default function Modal({
 
       {/* Modal Wrapper — clicking outside the panel closes the modal */}
       <div
-        className={`fixed inset-0 z-200 flex ${positionClasses[position]} justify-center p-4`}
+        className={`fixed inset-0 z-[200] flex ${positionClasses[position]} justify-center`}
         onClick={onClose}
       >
         <div
           className={`bg-white rounded-3xl shadow-2xl w-full  
-            transition-all duration-300 ease-out ${animationClasses[animation]} 
-            ${isAnimated ? openAnimation[animation] : ''} ${className}`}
+            transition-all duration-300 ease-out 
+            ${isAnimated ? openAnimation[animation] : animationClasses[animation]} ${className}`}
           onClick={(e) => e.stopPropagation()}
         >
 
