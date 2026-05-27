@@ -255,6 +255,8 @@ const Wallet = () => {
         }
     }, [fetchTonBalance, fetchTonEvents, tonConnected, tonRawAddress])
 
+    const [copied, setCopied] = useState(false)
+
     // ── Helpers ───────────────────────────────────────────
     const copyToClipboard = (text: string) => {
         try {
@@ -413,7 +415,8 @@ const Wallet = () => {
                                 <div className="border-[#DAD8FF33] flex items-center gap-1.5 px-2 py-1 border rounded-lg bg-[#FFFFFF1A]">
                                     <img src="/ton.jpg" className="w-4 h-4 rounded-sm" alt="" />
                                     <p className="text-white font-medium text-xs">
-                                        {tonWallet?.device?.appName ?? 'TON Wallet'}
+                                        {/* {tonWallet?.device?.appName ?? 'TON Wallet'} */}
+                                        TON
                                     </p>
                                 </div>
                                 <button onClick={() => setStarsModalOpen(true)} className="bg-white flex gap-1 items-center justify-center rounded-full px-3 h-[21px]">
@@ -433,8 +436,12 @@ const Wallet = () => {
 
                             <div className="pt-2 flex items-center gap-2">
                                 <p className="font-mono text-sm text-[#86efac]">{shortAddress(tonAddress)}</p>
-                                <button onClick={() => copyToClipboard(tonAddress)} title="Copy address">
-                                    <img src="/copy.svg" className="w-4 h-4 opacity-80" alt="" />
+                                <button onClick={() => {
+                                    copyToClipboard(tonAddress)
+                                    setCopied(true)
+
+                                }} title="Copy address">
+                                    <img src={copied ? "/copy-active.svg" : "/copy.svg"} className="w-4 h-4 opacity-80" alt="" />
                                 </button>
                                 <button onClick={() => { fetchTonBalance(); fetchTonEvents() }} className="ml-auto" title="Refresh">
                                     <img src="/refresh-2.svg" className="w-3.5 h-3.5 opacity-70" alt="" />
@@ -476,7 +483,14 @@ const Wallet = () => {
                         </div>
                         <div className="space-y-2">
                             {!tonConnected ? (
-                                <p className="text-[#666F8B] text-sm text-center py-8">Connect your TON wallet to see activity</p>
+                                <div className='bg-[#F5F7FB]  gap-3 flex flex-col items-center rounded-[20px] py-6'>
+                                    <img src="/transaction.svg" className='w-12 h-12' alt="" />
+                                    <div className='text-center'>
+                                        <p className='font-semibold text-[#666F8B] text-xs'>No Recent Activity</p>
+                                        <p className="text-[10px] w-[239px] text-[#666F8B] pt-2">Looks like there’s nothing here yet. Your transactions and activity will appear once you get started.</p>
+                                    </div>
+                                    <button className='rounded-lg border border-[#666F8B33] w-[214px] font-medium text-xs h-10 text-[#666F8B]'>Make Your First Transaction</button>
+                                </div>
                             ) : eventsLoading ? (
                                 <div className="flex justify-center py-8">
                                     <div className="w-6 h-6 border-2 border-[#6B6AFD33] border-t-[#6B6AFD] rounded-full animate-spin" />
@@ -602,77 +616,6 @@ const Wallet = () => {
                             </button>
                         )}
                     </div>
-
-                    {/* ── NFT Collection Section ── */}
-                    <div className="px-3 pt-10 pb-2">
-                        <p className="font-semibold text-xl text-[#0E0636] mb-1">NFT Collection</p>
-                        <p className="text-xs text-[#666F8B] mb-4">Deploy your own collection directly — no third-party needed.</p>
-
-                        {savedCollectionAddress ? (
-                            <div className="bg-[#6B6AFD0D] border border-[#6B6AFD33] rounded-2xl p-4">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <div className="w-8 h-8 rounded-xl bg-[#6B6AFD] flex items-center justify-center">
-                                        <span className="text-white text-sm">🎨</span>
-                                    </div>
-                                    <div>
-                                        <p className="font-semibold text-sm text-[#0E0636]">Collection Deployed</p>
-                                        <p className="text-[10px] text-[#666F8B]">Ready for minting</p>
-                                    </div>
-                                    <div className="ml-auto w-2 h-2 rounded-full bg-green-400" />
-                                </div>
-                                <div className="bg-white rounded-xl px-3 py-2 mb-3">
-                                    <p className="text-[10px] text-[#666F8B] mb-0.5">Collection Address</p>
-                                    <p className="font-mono text-[11px] text-[#6B6AFD] break-all">{savedCollectionAddress}</p>
-                                </div>
-                                <div className="flex gap-2">
-                                    <a
-                                        href={`${TON_EXPLORER_COLLECTION}/address/${savedCollectionAddress}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex-1 h-9 border border-[#6B6AFD] text-[#6B6AFD] text-xs font-semibold rounded-xl flex items-center justify-center"
-                                    >
-                                        View on Explorer ↗
-                                    </a>
-                                    <button
-                                        onClick={() => copyToClipboard(savedCollectionAddress)}
-                                        className="flex-1 h-9 bg-[#6B6AFD] text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1"
-                                    >
-                                        Copy Address
-                                    </button>
-                                </div>
-                                <button
-                                    onClick={() => {
-                                        setCollectionName('')
-                                        setCollectionDesc('')
-                                        setDeployStatus('idle')
-                                        setDeployError('')
-                                        setDeployCollectionModal(true)
-                                    }}
-                                    className="mt-2 w-full h-8 text-[#666F8B] text-xs"
-                                >
-                                    Deploy another collection
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={() => {
-                                    if (!tonConnected) {
-                                        tonConnectUI.openModal()
-                                        return
-                                    }
-                                    setCollectionName('')
-                                    setCollectionDesc('')
-                                    setDeployStatus('idle')
-                                    setDeployError('')
-                                    setDeployCollectionModal(true)
-                                }}
-                                className="w-full bg-gradient-to-r from-[#6B6AFD] to-[#8B6FFF] text-white font-semibold text-sm rounded-2xl py-4 flex items-center justify-center gap-3"
-                            >
-                                <span className="text-xl">🚀</span>
-                                <span>Deploy My NFT Collection</span>
-                            </button>
-                        )}
-                    </div>
                 </>
             )}
 
@@ -776,11 +719,11 @@ const Wallet = () => {
             )}
 
             {/* ═══════════ DEPOSIT MODAL ═══════════ */}
-            <Modal 
-                className="bottom-0 absolute w-screen m-0 rounded-b-none" 
-                position="bottom" 
+            <Modal
+                className="bottom-0 absolute w-screen m-0 rounded-b-none"
+                position="bottom"
                 animation="slide-up"
-                isOpen={depositModalOpen} 
+                isOpen={depositModalOpen}
                 onClose={() => setDepositModalOpen(false)}
             >
                 <h2 className="text-center font-semibold text-xl text-[#0E0636]">Deposit</h2>
@@ -818,11 +761,11 @@ const Wallet = () => {
             </Modal>
 
             {/* ═══════════ WITHDRAW MODAL ═══════════ */}
-            <Modal 
-                className="bottom-0 absolute w-screen m-0 rounded-b-none" 
-                position="bottom" 
+            <Modal
+                className="bottom-0 absolute w-screen m-0 rounded-b-none"
+                position="bottom"
                 animation="slide-up"
-                isOpen={withdrawModalOpen} 
+                isOpen={withdrawModalOpen}
                 onClose={() => setWithdrawModalOpen(false)}
             >
                 <h2 className="text-center font-semibold text-xl text-[#0E0636]">Withdraw</h2>
@@ -936,11 +879,11 @@ const Wallet = () => {
             </Modal>
 
             {/* ═══════════ DEPLOY COLLECTION MODAL ═══════════ */}
-            <Modal 
-                className="bottom-0 absolute w-screen m-0 rounded-b-none" 
-                position="bottom" 
+            <Modal
+                className="bottom-0 absolute w-screen m-0 rounded-b-none"
+                position="bottom"
                 animation="slide-up"
-                isOpen={deployCollectionModal} 
+                isOpen={deployCollectionModal}
                 onClose={() => setDeployCollectionModal(false)}
             >
                 <h2 className="text-center font-semibold text-xl text-[#0E0636]">Deploy NFT Collection</h2>
