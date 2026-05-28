@@ -170,7 +170,7 @@ const Detail = () => {
             return `${base}${sep}startapp=${encodeURIComponent(`collectible_${id}`)}`
         }
         if (typeof window !== 'undefined') {
-            return `${window.location.origin}/app/detail/${encodeURIComponent(id)}`
+            return `${window.location.origin}/asset/${encodeURIComponent(id)}`
         }
         return ''
     }, [id])

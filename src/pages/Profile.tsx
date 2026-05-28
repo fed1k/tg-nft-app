@@ -328,7 +328,7 @@ const Profile = () => {
                                     <button
                                         onClick={() => {
                                             const link = appDeepLinkBase 
-                                                ? `${appDeepLinkBase}${appDeepLinkBase.includes('?') ? '&' : '?'}startapp=col_${user.id}`
+                                                ? `${appDeepLinkBase}${appDeepLinkBase.includes('?') ? '&' : '?'}startapp=${encodeURIComponent(`col_${user.id}`)}`
                                                 : `${window.location.origin}/app/collection/${user.id}`
                                             copyToClipboard(link)
                                         }}
