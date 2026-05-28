@@ -7,7 +7,7 @@ const Splash = () => {
     const navigate = useNavigate()
     const { isInTelegram, accessState, verifyAccountAccess, webApp } = useTelegram()
     const [checking, setChecking] = useState(false)
-    const [activeIndex, setActiveIndex] = useState(0)
+    const [activeIndex, setActiveIndex] = useState(2)
 
     const galleryImages = [
         "/bear.jpg",
@@ -73,22 +73,22 @@ const Splash = () => {
             <div className='max-w-[393px] mx-auto overflow-hidden flex flex-col min-h-screen relative z-10'>
                 {/* Image Slider */}
                 <div className='pt-12 flex-shrink-0'>
-                    <div className='relative mask-fade-edges overflow-hidden h-[280px]'>
+                    <div className='relative mask-fade-edges overflow-hidden h-[305px]'>
                         <div
-                            className='flex gap-4 py-8 transition-transform duration-700 ease-in-out px-[calc(50%-70px)]'
+                            className='flex gap-4 transition-transform duration-700 ease-in-out px-[calc(50%-70px)]'
                             style={{
-                                transform: `translateX(-${activeIndex * (140 + 16)}px)`,
+                                transform: `translateX(-${activeIndex * (242 + 16)}px)`,
                             }}
                         >
                             {galleryImages.map((src, i) => (
                                 <div
                                     key={i}
-                                    className={`relative flex-shrink-0 transition duration-700 ease-in-out ${activeIndex === i ? 'opacity-100 translate-y-4' : 'opacity-40 -translate-y-4'
+                                    className={`relative flex-shrink-0 transition duration-700 ease-in-out ${activeIndex === i ? 'opacity-100 translate-y-5' : 'opacity-40 translate-y-0'
                                         } will-change-transform`}
                                 >
                                     <img
                                         src={src}
-                                        className='w-[140px] h-[190px] object-cover border-[1.5px] border-white/20 rounded-[32px] shadow-2xl'
+                                        className='w-[229px] h-[283px] object-cover border-2 border-white rounded-[32px] shadow-2xl'
                                         alt=""
                                     />
                                     <div className="absolute inset-0 rounded-[32px] reflection-overlay"></div>
@@ -104,9 +104,9 @@ const Splash = () => {
                         <div
                             key={i}
                             onClick={() => setActiveIndex(i)}
-                            className={`cursor-pointer transition-all duration-300 rounded-full bg-white ${activeIndex === i
-                                    ? 'w-[13px] h-[13px] opacity-100'
-                                    : 'w-[13px] h-[13px] opacity-40 scale-[0.7]'
+                            className={` border border-white cursor-pointer transition-all duration-300 rounded-full  ${activeIndex === i
+                                    ? 'w-[14px] h-[14px] bg-transparent'
+                                    : 'w-[9px] h-[9px] bg-white'
                                 }`}
                         ></div>
                     ))}
@@ -114,7 +114,7 @@ const Splash = () => {
 
                 <div className='text-white pt-12 px-6'>
                     <h2 className='text-center text-2xl font-semibold'>Own. Mint. Trade NFTs.</h2>
-                    <p className='text-center pt-4'>
+                    <p className='text-center pt-4 font-light'>
                         Take control of your digital assets and <br /> StarGifts with GiftedForge—all in one <br /> seamless experience.
                     </p>
 
