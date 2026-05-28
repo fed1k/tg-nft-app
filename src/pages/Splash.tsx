@@ -121,9 +121,9 @@ const Splash = () => {
                     <button
                         onClick={handleContinueWithTelegram}
                         disabled={checking || accessState === 'blocked'}
-                        className='border border-white mt-12 rounded-lg w-full h-11 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-white/10 transition-colors disabled:opacity-50'
+                        className={`border ${checking ? "bg-white text-[#0E0636]" : ""} border-white mt-12 rounded-lg w-full h-11 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-white/10 transition-colors disabled:opacity-50`}
                     >
-                        {checking ? 'Checking…' : isInTelegram ? 'Continue with Telegram' : 'Open App'}
+                        {isInTelegram ? 'Continue with Telegram' : 'Open App'}
                     </button>
 
                     <div className='flex gap-4 pt-4'>
