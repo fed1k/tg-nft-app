@@ -9,5 +9,5 @@ export const GIFTEDFORGE_DEPLOY = {
   frontendOrigin: 'https://nft.giftedforge.com',
   backendOrigin: 'https://nft.giftedforge.com',
   /** TON Connect return / deep link — same bot as Mini App */
-  telegramMiniAppUrl: 'https://t.me/giftedforge_bot/giftedforge',
+  telegramMiniAppUrl: 'https://t.me/giftedforge_bot',
 } as const
