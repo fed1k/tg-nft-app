@@ -6,7 +6,9 @@ import type {
   AdminTransaction,
   AdminUser,
   DashboardSnapshot,
+  Nomination,
   PlatformSettings,
+  ReferralLeaderboardItem,
 } from './types'
 import { GIFTEDFORGE_DEPLOY } from '../../config/giftedforgeDeploy'
 
@@ -147,6 +149,20 @@ export const adminClient = {
     }),
 
   getAlerts: async () => api<AdminAlertItem[]>('/alerts'),
+
+  getReferralLeaderboard: async (weekId?: string) =>
+    api<{ weekId: string; leaderboard: ReferralLeaderboardItem[] }>(
+      `/referrals/leaderboard${weekId ? `?weekId=${weekId}` : ''}`,
+    ),
+
+  nominateWinner: async (input: { userId: string; rank: number; weekId?: string }) =>
+    api<{ ok: boolean; nomination: any }>('/referrals/nominate', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  getNominations: async (weekId?: string) =>
+    api<Nomination[]>(`/referrals/nominations${weekId ? `?weekId=${weekId}` : ''}`),
 }
 
 export type AdminClient = typeof adminClient

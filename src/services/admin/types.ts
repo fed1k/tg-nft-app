@@ -18,6 +18,25 @@ export interface AdminUser {
   email?: string
   username?: string
   walletAddress?: string
+  referralCode?: string
+  referredByCode?: string
+  referralCount: number
+  referralEarnedUsd: number
+  referralPendingUsd: number
+  hasMinted: boolean
+}
+
+export interface ReferralLeaderboardItem {
+  userId: string
+  name: string
+  username: string
+  img: string
+  count: number
+}
+
+export interface Nomination {
+  rank: number
+  user: AdminUser | null
 }
 
 export interface AdminAsset {

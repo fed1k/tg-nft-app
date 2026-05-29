@@ -15,6 +15,7 @@ type SettingsPanel =
   | 'reports'
   | 'db'
   | 'locale'
+  | 'referrals'
   | null
 
 const isLikelyTelegramUsername = (value: string) => /^@[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(value.trim())
@@ -41,6 +42,25 @@ export default function AdminControl() {
   const { data: alerts = [] } = useQuery({
     queryKey: adminQk.alerts(),
     queryFn: () => adminClient.getAlerts(),
+  })
+
+  const { data: leaderboardData } = useQuery({
+    queryKey: adminQk.referralLeaderboard(),
+    queryFn: () => adminClient.getReferralLeaderboard(),
+    enabled: panel === 'referrals',
+  })
+
+  const { data: currentNominations = [] } = useQuery({
+    queryKey: adminQk.nominations(),
+    queryFn: () => adminClient.getNominations(),
+    enabled: panel === 'referrals',
+  })
+
+  const nominateMut = useMutation({
+    mutationFn: adminClient.nominateWinner,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminQk.nominations() })
+    },
   })
 
   const validStaff = staff.filter((s) => isLikelyTelegramUsername(normalizeUsername(s.username)))
@@ -185,6 +205,12 @@ export default function AdminControl() {
 
       <Section title="Moderation">
         <Row
+          icon="/profile-2user.svg"
+          title="Referral Competition"
+          subtitle="Nominate top 3 weekly inviters"
+          onClick={() => setPanel('referrals')}
+        />
+        <Row
           icon="/taggray.svg"
           title="Report’s"
           subtitle="User reports and disputed items · queue in backend"
@@ -219,6 +245,100 @@ export default function AdminControl() {
           End admin session
         </button>
       </div>
+
+      <Modal isOpen={panel === 'referrals'} onClose={() => setPanel(null)}>
+        <p className="font-semibold text-[#0E0636] text-lg pb-2">Referral Competition</p>
+        <p className="text-xs text-[#666F8B] pb-4 leading-relaxed">
+          Weekly leaderboard based on "legit" referrals (invited users who minted at least 1 NFT). Nominate the top 3
+          winners for the current week: <span className="font-bold">{leaderboardData?.weekId}</span>.
+        </p>
+
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          <Section title="Top Inviters (This Week)">
+            <ul className="space-y-2 mt-2">
+              {(leaderboardData?.leaderboard || []).map((item, idx) => {
+                const existingNomination = currentNominations.find((n) => n.user?.id === item.userId)
+                return (
+                  <li
+                    key={item.userId}
+                    className="flex items-center justify-between gap-3 p-2 border border-[#666F8B22] rounded-xl bg-[#F9FAFB]"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <img src={item.img} className="w-8 h-8 rounded-full bg-gray-200" alt="" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate text-[#0E0636]">{item.name}</p>
+                        <p className="text-[10px] text-[#666F8B] truncate">{item.username}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-[#6B6AFD]">{item.count}</p>
+                        <p className="text-[9px] text-[#666F8B]">referrals</p>
+                      </div>
+                      <div className="flex gap-1">
+                        {[1, 2, 3].map((rank) => {
+                          const isNominated = existingNomination?.rank === rank
+                          return (
+                            <button
+                              key={rank}
+                              type="button"
+                              onClick={() => nominateMut.mutate({ userId: item.userId, rank })}
+                              className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border transition-colors ${
+                                isNominated
+                                  ? 'bg-[#6B6AFD] text-white border-[#6B6AFD]'
+                                  : 'border-[#666F8B33] text-[#666F8B] hover:bg-[#6B6AFD1A]'
+                              }`}
+                            >
+                              {rank}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </li>
+                )
+              })}
+              {leaderboardData?.leaderboard.length === 0 && (
+                <p className="text-xs text-[#666F8B] text-center py-4">No legit referrals recorded this week yet.</p>
+              )}
+            </ul>
+          </Section>
+
+          <Section title="Current Weekly Winners">
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              {[1, 2, 3].map((rank) => {
+                const nomination = currentNominations.find((n) => n.rank === rank)
+                return (
+                  <div
+                    key={rank}
+                    className="flex flex-col items-center p-2 border border-[#666F8B22] rounded-xl bg-white relative"
+                  >
+                    <div className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-black text-white text-[10px] flex items-center justify-center font-bold">
+                      #{rank}
+                    </div>
+                    <img
+                      src={nomination?.user?.img || '/white-man.jpg'}
+                      className={`w-10 h-10 rounded-full bg-gray-100 mb-1 ${!nomination ? 'opacity-30 grayscale' : ''}`}
+                      alt=""
+                    />
+                    <p className="text-[10px] font-semibold text-[#0E0636] truncate w-full text-center">
+                      {nomination?.user?.name || 'Vacant'}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          </Section>
+        </div>
+
+        <button
+          type="button"
+          className="w-full mt-6 rounded-lg bg-[#6B6AFD] text-white py-2.5 text-sm font-semibold"
+          onClick={() => setPanel(null)}
+        >
+          Done
+        </button>
+      </Modal>
 
       <Modal isOpen={panel === 'fees'} onClose={() => setPanel(null)}>
         <p className="font-semibold text-[#0E0636] text-lg pb-2">Platform fee %</p>

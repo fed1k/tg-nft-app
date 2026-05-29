@@ -7,4 +7,6 @@ export const adminQk = {
   staff: () => [...adminQk.root, 'staff'] as const,
   settings: () => [...adminQk.root, 'settings'] as const,
   alerts: () => [...adminQk.root, 'alerts'] as const,
+  referralLeaderboard: (weekId?: string) => [...adminQk.root, 'referralLeaderboard', weekId] as const,
+  nominations: (weekId?: string) => [...adminQk.root, 'nominations', weekId] as const,
 }

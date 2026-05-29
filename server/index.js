@@ -113,9 +113,40 @@ const userSchema = new mongoose.Schema(
     referralCount: { type: Number, default: 0 },
     referralEarnedUsd: { type: Number, default: 0 },
     referralPendingUsd: { type: Number, default: 0 },
+    hasMinted: { type: Boolean, default: false },
   },
   commonOpts,
 )
+
+const referralRecordSchema = new mongoose.Schema(
+  {
+    inviterId: { type: mongoose.Schema.Types.ObjectId, ref: 'AdminUser', index: true },
+    invitedId: { type: mongoose.Schema.Types.ObjectId, ref: 'AdminUser', unique: true, index: true },
+    status: { type: String, enum: ['Pending', 'Completed'], default: 'Pending' },
+    completedAt: { type: Date },
+  },
+  commonOpts,
+)
+
+const nominationSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'AdminUser', index: true },
+    weekId: { type: String, index: true }, // e.g. "2024-W22"
+    rank: { type: Number }, // 1, 2, or 3
+  },
+  commonOpts,
+)
+
+const AdminNomination = mongoose.models.AdminNomination || mongoose.model('AdminNomination', nominationSchema)
+
+function getWeekId(date = new Date()) {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7))
+  const yearStart = new Date(d.getFullYear(), 0, 1)
+  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+  return `${d.getFullYear()}-W${weekNo}`
+}
 
 const assetSchema = new mongoose.Schema(
   {
@@ -283,6 +314,7 @@ const AdminSettings = mongoose.models.AdminSettings || mongoose.model('AdminSett
 const AdminAlert = mongoose.models.AdminAlert || mongoose.model('AdminAlert', alertSchema)
 const PendingMint = mongoose.models.PendingMint || mongoose.model('PendingMint', pendingMintSchema)
 const GiftListing = mongoose.models.GiftListing || mongoose.model('GiftListing', giftListingSchema)
+const AdminReferral = mongoose.models.AdminReferral || mongoose.model('AdminReferral', referralRecordSchema)
 
 function fmtDate(date) {
   return new Date(date).toLocaleDateString('en-US', {
@@ -1018,6 +1050,48 @@ async function syncPendingMintToDb(pending) {
     timeBadge: 'Now',
   })
 
+  // Handle legit referral completion on first mint
+  if (!actor.hasMinted) {
+    actor.hasMinted = true
+    await actor.save()
+
+    let referral = await AdminReferral.findOne({ invitedId: actor._id, status: 'Pending' })
+    let inviterId = referral?.inviterId
+
+    if (!inviterId && actor.referredByCode) {
+      const inviter = await AdminUser.findOne({ referralCode: actor.referredByCode })
+      if (inviter) inviterId = inviter._id
+    }
+
+    if (inviterId) {
+      if (!referral) {
+        await AdminReferral.create({
+          invitedId: actor._id,
+          inviterId: inviterId,
+          status: 'Completed',
+          completedAt: new Date(),
+        })
+      } else {
+        referral.status = 'Completed'
+        referral.completedAt = new Date()
+        await referral.save()
+      }
+
+      const inviter = await AdminUser.findById(inviterId)
+      if (inviter) {
+        inviter.referralCount = (Number(inviter.referralCount) || 0) + 1
+        inviter.referralPendingUsd = Math.max(
+          0,
+          Number((Number(inviter.referralPendingUsd || 0) - REFERRAL_BONUS_USD).toFixed(2)),
+        )
+        inviter.referralEarnedUsd = Number(
+          (Number(inviter.referralEarnedUsd || 0) + REFERRAL_BONUS_USD).toFixed(2),
+        )
+        await inviter.save()
+      }
+    }
+  }
+
   pending.status = 'saved'
   pending.assetId = assetDoc._id
   pending.lastCheckedAt = new Date()
@@ -1263,6 +1337,60 @@ app.get('/api/admin/health', async (_req, res) => {
 app.post('/api/admin/access-check', async (req, res) => {
   const result = await resolveAdminAccess(req.body?.telegramId, req.body?.username)
   res.json(result)
+})
+
+app.get('/api/admin/referrals/leaderboard', async (req, res) => {
+  const weekId = String(req.query.weekId || getWeekId())
+  const now = new Date()
+  const startOfWeek = new Date(now)
+  startOfWeek.setDate(now.getDate() - ((now.getDay() + 6) % 7))
+  startOfWeek.setHours(0, 0, 0, 0)
+
+  const leaderboard = await AdminReferral.aggregate([
+    { $match: { status: 'Completed', completedAt: { $gte: startOfWeek } } },
+    { $group: { _id: '$inviterId', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 20 },
+  ])
+
+  const enriched = await Promise.all(
+    leaderboard.map(async (item) => {
+      const user = await AdminUser.findById(item._id)
+      return {
+        userId: String(item._id),
+        name: user?.name || 'Unknown',
+        username: user?.username || 'unknown',
+        img: user?.img || '/white-man.jpg',
+        count: item.count,
+      }
+    }),
+  )
+
+  res.json({ weekId, leaderboard: enriched })
+})
+
+app.post('/api/admin/referrals/nominate', async (req, res) => {
+  const { userId, rank, weekId = getWeekId() } = req.body
+  if (!userId || !rank) return res.status(400).json({ message: 'userId and rank are required' })
+
+  const nomination = await AdminNomination.findOneAndUpdate(
+    { weekId, rank },
+    { userId },
+    { upsert: true, new: true },
+  )
+
+  res.json({ ok: true, nomination })
+})
+
+app.get('/api/admin/referrals/nominations', async (req, res) => {
+  const weekId = String(req.query.weekId || getWeekId())
+  const nominations = await AdminNomination.find({ weekId }).sort({ rank: 1 }).populate('userId')
+  res.json(
+    nominations.map((n) => ({
+      rank: n.rank,
+      user: n.userId ? toAdminUser(n.userId) : null,
+    })),
+  )
 })
 
 app.get('/api/admin/dashboard', async (_req, res) => {
@@ -2648,8 +2776,14 @@ app.post('/api/user/session', async (req, res) => {
         const referrer = await AdminUser.findOne({ referralCode: normalizedReferralCode })
         if (referrer && String(referrer._id) !== String(existing._id)) {
           existing.referredByCode = normalizedReferralCode
-          referrer.referralCount = (Number(referrer.referralCount) || 0) + 1
-          referrer.referralPendingUsd = Number((Number(referrer.referralPendingUsd || 0) + REFERRAL_BONUS_USD).toFixed(2))
+          await AdminReferral.findOneAndUpdate(
+            { invitedId: existing._id },
+            { inviterId: referrer._id, status: 'Pending' },
+            { upsert: true, setDefaultsOnInsert: true },
+          )
+          referrer.referralPendingUsd = Number(
+            (Number(referrer.referralPendingUsd || 0) + REFERRAL_BONUS_USD).toFixed(2),
+          )
           await referrer.save()
         }
       }
@@ -2682,8 +2816,14 @@ app.post('/api/user/session', async (req, res) => {
       const referrer = await AdminUser.findOne({ referralCode: normalizedReferralCode })
       if (referrer && String(referrer._id) !== String(created._id)) {
         created.referredByCode = normalizedReferralCode
-        referrer.referralCount = (Number(referrer.referralCount) || 0) + 1
-        referrer.referralPendingUsd = Number((Number(referrer.referralPendingUsd || 0) + REFERRAL_BONUS_USD).toFixed(2))
+        await AdminReferral.findOneAndUpdate(
+          { invitedId: created._id },
+          { inviterId: referrer._id, status: 'Pending' },
+          { upsert: true, setDefaultsOnInsert: true },
+        )
+        referrer.referralPendingUsd = Number(
+          (Number(referrer.referralPendingUsd || 0) + REFERRAL_BONUS_USD).toFixed(2),
+        )
         await Promise.all([created.save(), referrer.save()])
       }
     }

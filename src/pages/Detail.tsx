@@ -585,7 +585,7 @@ const Detail = () => {
 
             <div className="relative rounded-3xl mb-6">
                 <div className="bg-[#0E06361A] rounded-3xl h-full w-full absolute z-10"></div>
-                <img className="rounded-3xl w-full" src={assetImage} alt={assetTitle} />
+                <img className="rounded-3xl w-full h-[322px]" src={assetImage} alt={assetTitle} />
                 {viewerOwned && (
                     <span className="absolute z-20 left-3 top-3 text-xs font-semibold bg-[#6B6AFD] text-white px-2.5 py-1 rounded-lg shadow-sm">
                         You own this
