@@ -616,6 +616,8 @@ const Wallet = () => {
                             </button>
                         )}
                     </div>
+
+                    <button onClick={() => setDeployCollectionModal(true)}>DEPLOY COLLECTION</button>
                 </>
             )}
 
