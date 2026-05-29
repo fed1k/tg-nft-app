@@ -28,6 +28,23 @@ const normalizeUsername = (value: string) => {
 export default function AdminControl() {
   const navigate = useNavigate()
   const qc = useQueryClient()
+
+  // State
+  const [panel, setPanel] = useState<SettingsPanel>(null)
+  const [adminModal, setAdminModal] = useState(false)
+  const [step, setStep] = useState(1)
+  const [adminFormError, setAdminFormError] = useState('')
+  const [newAdmin, setNewAdmin] = useState({
+    name: '',
+    email: '',
+    username: '',
+    telegramId: '',
+    roleModeration: true,
+    roleFinance: false,
+    roleOwner: false,
+  })
+
+  // Queries
   const refresh = () => void qc.invalidateQueries({ queryKey: adminQk.root })
 
   const { data: staff = [] } = useQuery({
@@ -39,6 +56,7 @@ export default function AdminControl() {
     queryKey: adminQk.settings(),
     queryFn: () => adminClient.getSettings(),
   })
+
   const { data: alerts = [] } = useQuery({
     queryKey: adminQk.alerts(),
     queryFn: () => adminClient.getAlerts(),
@@ -56,6 +74,12 @@ export default function AdminControl() {
     enabled: panel === 'referrals',
   })
 
+  // Mutations
+  const patchMut = useMutation({
+    mutationFn: adminClient.patchSettings,
+    onSuccess: refresh,
+  })
+
   const nominateMut = useMutation({
     mutationFn: adminClient.nominateWinner,
     onSuccess: () => {
@@ -63,6 +87,21 @@ export default function AdminControl() {
     },
   })
 
+  const addMut = useMutation({
+    mutationFn: adminClient.addStaffMember,
+    onSuccess: () => {
+      refresh()
+      setAdminModal(false)
+      setStep(1)
+    },
+  })
+
+  const removeMut = useMutation({
+    mutationFn: (id: string) => adminClient.removeStaffMember(id),
+    onSuccess: refresh,
+  })
+
+  // Derived
   const validStaff = staff.filter((s) => isLikelyTelegramUsername(normalizeUsername(s.username)))
   const invalidStaff = staff.filter((s) => !isLikelyTelegramUsername(normalizeUsername(s.username)))
 
@@ -76,42 +115,12 @@ export default function AdminControl() {
   }))
   const adminsCount = allAdmins.length
   const online = allAdmins.filter((s) => s.online).length
-  const patchMut = useMutation({
-    mutationFn: adminClient.patchSettings,
-    onSuccess: refresh,
-  })
 
-  const [adminModal, setAdminModal] = useState(false)
-  const [step, setStep] = useState(1)
-  const [panel, setPanel] = useState<SettingsPanel>(null)
-  const [feeInput, setFeeInput] = useState(String(settings?.platformFeePercent ?? 2))
-  const [feeReceiverInput, setFeeReceiverInput] = useState(String(settings?.feeReceiverWalletAddress ?? ''))
-  const [collectionAddrInput, setCollectionAddrInput] = useState(String(settings?.collectionAddress ?? ''))
-  const [uploadInput, setUploadInput] = useState(String(settings?.maxUploadMb ?? 500))
-
-  const addMut = useMutation({
-    mutationFn: adminClient.addStaffMember,
-    onSuccess: () => {
-      refresh()
-      setAdminModal(false)
-      setStep(1)
-    },
-  })
-  const removeMut = useMutation({
-    mutationFn: (id: string) => adminClient.removeStaffMember(id),
-    onSuccess: refresh,
-  })
-
-  const [newAdmin, setNewAdmin] = useState({
-    name: '',
-    email: '',
-    username: '',
-    telegramId: '',
-    roleModeration: true,
-    roleFinance: false,
-    roleOwner: false,
-  })
-  const [adminFormError, setAdminFormError] = useState('')
+  // Handlers
+  const [feeInput, setFeeInput] = useState('')
+  const [feeReceiverInput, setFeeReceiverInput] = useState('')
+  const [collectionAddrInput, setCollectionAddrInput] = useState('')
+  const [uploadInput, setUploadInput] = useState('')
 
   const openFees = () => {
     setFeeInput(String(settings?.platformFeePercent ?? 2))
@@ -246,6 +255,7 @@ export default function AdminControl() {
         </button>
       </div>
 
+      {/* MODALS */}
       <Modal isOpen={panel === 'referrals'} onClose={() => setPanel(null)}>
         <p className="font-semibold text-[#0E0636] text-lg pb-2">Referral Competition</p>
         <p className="text-xs text-[#666F8B] pb-4 leading-relaxed">
@@ -256,7 +266,7 @@ export default function AdminControl() {
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
           <Section title="Top Inviters (This Week)">
             <ul className="space-y-2 mt-2">
-              {(leaderboardData?.leaderboard || []).map((item, idx) => {
+              {(leaderboardData?.leaderboard || []).map((item) => {
                 const existingNomination = currentNominations.find((n) => n.user?.id === item.userId)
                 return (
                   <li
@@ -298,7 +308,7 @@ export default function AdminControl() {
                   </li>
                 )
               })}
-              {leaderboardData?.leaderboard.length === 0 && (
+              {(!leaderboardData || leaderboardData.leaderboard.length === 0) && (
                 <p className="text-xs text-[#666F8B] text-center py-4">No legit referrals recorded this week yet.</p>
               )}
             </ul>
