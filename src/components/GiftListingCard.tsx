@@ -4,6 +4,9 @@ import type { GiftMarketListing } from '../services/user/client'
 
 import type { TelegramWebApp } from '../contexts/TelegramContext'
 
+import { GiftStickerThumb } from './GiftStickerThumb'
+import { giftCardSurfaceStyle } from '../utils/giftVisuals'
+
 type MiniAppHooks = Partial<Pick<TelegramWebApp, 'HapticFeedback' | 'showAlert'>>
 
 type Props = {
@@ -39,18 +42,25 @@ const GiftListingCard: React.FC<Props> = ({
   const priceLabel =
     pricing === 'ton' ? `${Number(listing.priceTon).toFixed(4)} TON` : `${listing.priceStars.toLocaleString()} ★`
 
+  const surfaceStyle = giftCardSurfaceStyle(listing.background)
+
   return (
     <>
       <div className="border relative max-w-[166px] border-[#666F8B33] rounded-3xl px-2 pt-2 pb-5 bg-[#6B6AFD0D]">
         {/* Decorative overlay matching NftCard */}
         <div className="bg-[#0E06361A] h-[107px] w-[150px] absolute z-10 rounded-2xl pointer-events-none"></div>
 
-        {/* Emoji "Image" matching NftCard layout */}
+        {/* Gift Image with background and sticker */}
         <div
-          className="w-full h-[107px] rounded-2xl cursor-pointer bg-[E9EAF3] flex items-center justify-center text-4xl"
+          className="w-full h-[107px] rounded-2xl cursor-pointer flex items-center justify-center relative overflow-hidden"
+          style={surfaceStyle}
           onClick={() => setConfirmOpen(true)}
         >
-          {listing.emoji || '🎁'}
+          <GiftStickerThumb
+            initData={initData}
+            fileId={listing.stickerFileId}
+            emoji={listing.emoji || '🎁'}
+          />
         </div>
 
         {isOwnListing && (

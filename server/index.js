@@ -283,6 +283,12 @@ const giftListingSchema = new mongoose.Schema(
     ownedGiftId: { type: String, trim: true, default: '' },
     giftKind: { type: String, enum: ['regular'], default: 'regular' },
     emoji: { type: String, default: '🎁' },
+    stickerFileId: { type: String, trim: true },
+    background: {
+      center: { type: String, trim: true },
+      edge: { type: String, trim: true },
+      text: { type: String, trim: true },
+    },
     label: { type: String, default: '', trim: true },
     telegramStarCost: { type: Number, default: 0 },
     /** `stars` — buyer pays GiftedForge Stars; `ton` — buyer pays seller + platform via TON wallet. */
@@ -395,6 +401,8 @@ function toGiftListing(doc) {
     ownedGiftId: doc.ownedGiftId || '',
     giftKind: doc.giftKind || 'regular',
     emoji: doc.emoji || '🎁',
+    stickerFileId: doc.stickerFileId,
+    background: doc.background,
     label: doc.label || 'Gift',
     telegramStarCost: Number(doc.telegramStarCost) || 0,
     pricing,
@@ -2252,6 +2260,23 @@ app.post('/api/user/gift-listings', async (req, res) => {
   }
 
   const st = rawGift.gift?.sticker || {}
+  const bg = rawGift.gift?.background || {}
+  const c1 = bg.center_color
+  const c2 = bg.edge_color
+  const ct = bg.text_color
+  const hasBg = c1 != null || c2 != null || ct != null
+  const background = hasBg
+    ? {
+        center: rgbIntToCssHex(c1) || '#8b7fd8',
+        edge: rgbIntToCssHex(c2) || '#4b3f9e',
+        text: rgbIntToCssHex(ct) || '#ffffff',
+      }
+    : undefined
+
+  const thumb = st.thumbnail || {}
+  const mainStatic = !st.is_animated && !st.is_video
+  const stickerFileId = thumb.file_id || (mainStatic ? st.file_id : null) || undefined
+
   const label = String(rawGift.text || `Gift ${gid}`).trim().slice(0, 120)
   const sellerUsername = String(userUnsafe?.username || '')
     ? `@${String(userUnsafe.username).replace(/^@/, '')}`
@@ -2264,6 +2289,8 @@ app.post('/api/user/gift-listings', async (req, res) => {
     ownedGiftId,
     giftKind: 'regular',
     emoji: st.emoji || '🎁',
+    stickerFileId,
+    background,
     label,
     telegramStarCost,
     pricing,

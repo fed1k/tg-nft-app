@@ -133,6 +133,8 @@ export interface GiftMarketListing {
   ownedGiftId: string
   giftKind: string
   emoji: string
+  stickerFileId?: string
+  background?: TelegramGiftCardBackground | null
   label: string
   telegramStarCost: number
   pricing: 'stars' | 'ton'
