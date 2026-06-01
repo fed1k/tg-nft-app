@@ -7,8 +7,10 @@ import { useTonConnectUI, useTonAddress, useTonWallet } from '@tonconnect/ui-rea
 import { useTelegram } from '../contexts/TelegramContext'
 import { buildNftMintPayload, getNextItemIndex, TON_EXPLORER } from '../utils/tonNft'
 import { uploadImageToIPFS, uploadMetadataToIPFS, isPinataConfigured } from '../utils/pinata'
-import { getCollectionAddress, normalizeCollectionAddress } from '../utils/tonCollection'
+import { getCollectionAddress, normalizeCollectionAddress, buildCollectionDeployTransaction, saveCollectionAddress, TON_EXPLORER_COLLECTION } from '../utils/tonCollection'
 import { userClient } from '../services/user'
+
+type TxStatus = 'idle' | 'loading' | 'success' | 'error'
 
 // Must match server MINT_FEE_TON (see server/.env). Override with VITE_MINT_FEE_TON if needed.
 const MINT_FEE = (import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_MINT_FEE_TON?.trim() || '0.07'
@@ -118,9 +120,19 @@ const Mint = () => {
     const [isRecoveringMint, setIsRecoveringMint] = useState(false)
     const [recoveryMessage, setRecoveryMessage] = useState('')
 
+    // ── Deploy Collection state ────────────────────────────
+    const [deployCollectionModal, setDeployCollectionModal] = useState(false)
+    const [deploySuccessModal, setDeploySuccessModal] = useState(false)
+    const [collectionName, setCollectionName] = useState('')
+    const [collectionDesc, setCollectionDesc] = useState('')
+    const [collectionRoyalty, setCollectionRoyalty] = useState(5)
+    const [deployStatus, setDeployStatus] = useState<TxStatus>('idle')
+    const [deployError, setDeployError] = useState('')
+    const [deployedAddress, setDeployedAddress] = useState('')
+
     const isFormValid = !!name.trim() && !!price.trim() && !!imageFile && walletConnected
 
-    // ── Step helpers ──────────────────────────────────────────────────────────
+    // ── Step helpers ───────────────────────────────────────────
     const updateStep = (i: number, status: MintStep['status']) =>
         setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, status } : s))
 
@@ -204,7 +216,7 @@ const Mint = () => {
     const doMint = useCallback(async () => {
         if (!imageFile) throw new Error('No image selected')
         if (!COLLECTION_ADDRESS) throw new Error(
-            'Collection address not set.\nAsk admin to set Global Collection Address in Admin Panel, or deploy your own in Wallet tab.'
+            'Collection address not set.\nAsk admin to set Global Collection Address in Admin Panel, or deploy your own using the button below.'
         )
 
         setSteps(INITIAL_STEPS)
@@ -354,6 +366,50 @@ const Mint = () => {
             }
         })()
     }, [imageFile, name, description, price, tonAddress, tonRawAddress, tonWallet, tonConnectUI, COLLECTION_ADDRESS, persistMintToBackend, pollMintListingSync, queryClient, platformFeeOnMintTon, feeReceiverWalletAddress, mintFeeTonNum])
+
+    // ── Deploy Collection handler ─────────────────────────
+    const handleDeployCollection = async () => {
+        if (!collectionName.trim()) return
+        if (!tonWallet || !tonAddress) {
+            setDeployError('Connect your TON wallet to deploy.')
+            return
+        }
+        setDeployStatus('loading')
+        setDeployError('')
+        try {
+            const { address, stateInitBoc, amount } = await buildCollectionDeployTransaction({
+                ownerAddress: tonRawAddress || tonAddress,
+                collectionName: collectionName.trim(),
+                collectionDescription: collectionDesc.trim(),
+                royaltyPercent: collectionRoyalty,
+            })
+
+            // ⚡ Save address BEFORE opening wallet — so if app reloads on redirect, address is persisted
+            saveCollectionAddress(address)
+            setDeployedAddress(address)
+            setCollectionAddress(address) // Update local state so Mint UI refreshes
+
+            await tonConnectUI.sendTransaction({
+                validUntil: Math.floor(Date.now() / 1000) + 600,
+                messages: [{
+                    address,
+                    amount: String(Math.floor(parseFloat(amount) * 1e9)),
+                    stateInit: stateInitBoc,
+                }],
+            })
+
+            setDeployStatus('success')
+            setDeployCollectionModal(false)
+            setDeploySuccessModal(true)
+        } catch (err: any) {
+            setDeployStatus('error')
+            setDeployError(
+                err?.message?.includes('User declined')
+                    ? 'Cancelled by user.'
+                    : err?.message ?? 'Deployment failed. Try again.'
+            )
+        }
+    }
 
     // ── Telegram MainButton handler ───────────────────────────────────────────
     const handleTelegramMint = useCallback(() => {
@@ -545,10 +601,10 @@ const Mint = () => {
                     {/* Steps card */}
                     <div className="bg-white mx-3 -mt-5 rounded-2xl px-4 py-4 shadow-sm">
                         {[
-                            { n: '1', text: 'Go to Wallet tab' },
-                            { n: '2', text: 'Tap "Deploy My NFT Collection"' },
+                            { n: '1', text: 'Connect your TON wallet' },
+                            { n: '2', text: 'Tap "Deploy Collection Now" below' },
                             { n: '3', text: 'Enter name → Approve in wallet' },
-                            { n: '4', text: 'Come back here and mint!' },
+                            { n: '4', text: 'Ready to mint your first NFT!' },
                         ].map(step => (
                             <div key={step.n} className="flex items-center gap-3 py-2">
                                 <div className="w-6 h-6 rounded-full bg-[#6B6AFD] flex items-center justify-center flex-shrink-0">
@@ -561,7 +617,7 @@ const Mint = () => {
 
                     <div className="px-3 mt-3">
                         <button
-                            onClick={() => navigate('/app/wallet')}
+                            onClick={() => setDeployCollectionModal(true)}
                             className="w-full bg-[#6B6AFD] text-white font-semibold text-sm rounded-2xl py-4 flex items-center justify-center gap-2"
                         >
                             <span>🚀</span>
@@ -811,6 +867,119 @@ const Mint = () => {
                             Go Home
                         </button>
                     </div>
+                </div>
+            </Modal>
+
+            {/* ═══════════ DEPLOY COLLECTION MODAL ═══════════ */}
+            <Modal
+                className="bottom-0 absolute w-screen m-0 rounded-b-none"
+                position="bottom"
+                animation="slide-up"
+                isOpen={deployCollectionModal}
+                onClose={() => setDeployCollectionModal(false)}
+            >
+                <h2 className="text-center font-semibold text-xl text-[#0E0636]">Deploy NFT Collection</h2>
+                <p className="pt-2 pb-5 text-[#666F8B] text-center text-xs">
+                    Your collection contract will be deployed on TON {import.meta.env?.VITE_TON_NETWORK === 'testnet' ? 'Testnet' : 'Mainnet'}.
+                    Cost: ~0.05 TON
+                </p>
+
+                <label className="text-sm font-medium text-[#0E0636]">Collection Name *</label>
+                <input
+                    className="mt-2 mb-4 w-full h-[52px] border border-[#6B6AFD33] rounded-xl px-4 text-sm outline-none focus:border-[#6B6AFD] bg-[#6B6AFD0D]"
+                    placeholder="e.g. My Awesome NFTs"
+                    value={collectionName}
+                    onChange={e => setCollectionName(e.target.value)}
+                    maxLength={64}
+                />
+
+                <label className="text-sm font-medium text-[#0E0636]">Description</label>
+                <textarea
+                    className="mt-2 mb-4 w-full border border-[#6B6AFD33] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#6B6AFD] bg-[#6B6AFD0D] resize-none"
+                    placeholder="Describe your NFT collection..."
+                    rows={3}
+                    value={collectionDesc}
+                    onChange={e => setCollectionDesc(e.target.value)}
+                    maxLength={256}
+                />
+
+                <div className="mb-5">
+                    <div className="flex justify-between mb-2">
+                        <label className="text-sm font-medium text-[#0E0636]">Royalty</label>
+                        <span className="text-sm font-semibold text-[#6B6AFD]">{collectionRoyalty}%</span>
+                    </div>
+                    <input
+                        type="range"
+                        min={0} max={15} step={1}
+                        value={collectionRoyalty}
+                        onChange={e => setCollectionRoyalty(Number(e.target.value))}
+                        className="w-full accent-[#6B6AFD]"
+                    />
+                    <div className="flex justify-between text-[10px] text-[#666F8B] mt-1">
+                        <span>0%</span><span>5%</span><span>10%</span><span>15%</span>
+                    </div>
+                </div>
+
+                {deployError && (
+                    <div className="mb-4 bg-[#DA09091A] border border-[#DA090933] rounded-xl px-4 py-3">
+                        <p className="text-[#DA0909] text-xs">{deployError}</p>
+                    </div>
+                )}
+
+                <button
+                    onClick={handleDeployCollection}
+                    disabled={!collectionName.trim() || deployStatus === 'loading'}
+                    className="w-full bg-[#6B6AFD] text-white text-sm font-semibold rounded-xl h-[48px] flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    {deployStatus === 'loading' ? (
+                        <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Deploying...
+                        </>
+                    ) : '🚀 Deploy Collection'}
+                </button>
+            </Modal>
+
+            {/* ═══════════ DEPLOY SUCCESS MODAL ═══════════ */}
+            <Modal isOpen={deploySuccessModal} onClose={() => setDeploySuccessModal(false)}>
+                <div className="text-center py-2">
+                    <div className="text-5xl mb-4">🎉</div>
+                    <p className="text-xl font-semibold text-[#0E0636]">Collection Deployed!</p>
+                    <p className="text-sm text-[#666F8B] pt-2 pb-4">
+                        Your NFT collection is live on TON blockchain. You can now mint NFTs into it.
+                    </p>
+                    <div className="bg-[#F5F7FB] rounded-xl px-4 py-3 mb-4 text-left">
+                        <p className="text-[10px] text-[#666F8B] mb-1">Collection Address</p>
+                        <p className="font-mono text-xs text-[#0E0636] break-all">{deployedAddress}</p>
+                    </div>
+                    <div className="flex gap-2 mb-3">
+                        <a
+                            href={`${TON_EXPLORER_COLLECTION}/address/${deployedAddress}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 h-11 border border-[#6B6AFD] text-[#6B6AFD] text-sm font-semibold rounded-xl flex items-center justify-center"
+                        >
+                            View on Explorer ↗
+                        </a>
+                        <button
+                            onClick={() => {
+                                if (navigator.clipboard) {
+                                    navigator.clipboard.writeText(deployedAddress)
+                                } else {
+                                    webApp?.showAlert(`Address: ${deployedAddress}`)
+                                }
+                            }}
+                            className="flex-1 h-11 bg-[#6B6AFD0D] text-[#6B6AFD] text-sm font-semibold rounded-xl"
+                        >
+                            Copy Address
+                        </button>
+                    </div>
+                    <button
+                        onClick={() => { setDeploySuccessModal(false); }}
+                        className="w-full h-11 bg-[#6B6AFD] text-white rounded-xl text-sm font-semibold"
+                    >
+                        Start Minting →
+                    </button>
                 </div>
             </Modal>
         </div>

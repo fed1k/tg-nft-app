@@ -14,10 +14,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit'
 
 // Collection deployment
 import {
-    buildCollectionDeployTransaction,
-    saveCollectionAddress,
     getCollectionAddress,
-    TON_EXPLORER_COLLECTION,
 } from '../utils/tonCollection'
 import { useTelegram } from '../contexts/TelegramContext'
 import { userClient } from '../services/user'
@@ -107,8 +104,6 @@ const Wallet = () => {
     const [starsTopupAmount, setStarsTopupAmount] = useState('100')
     const [starsTopupMsg, setStarsTopupMsg] = useState('')
     const [txResultModal, setTxResultModal] = useState(false)
-    const [deployCollectionModal, setDeployCollectionModal] = useState(false)
-    const [deploySuccessModal, setDeploySuccessModal] = useState(false)
 
     // ── Withdraw form ─────────────────────────────────────
     const [withdrawAddress, setWithdrawAddress] = useState('')
@@ -117,16 +112,6 @@ const Wallet = () => {
     const [withdrawTxHash, setWithdrawTxHash] = useState('')
     const [withdrawError, setWithdrawError] = useState('')
 
-    // ── Deploy Collection form ────────────────────────────
-    const [collectionName, setCollectionName] = useState('')
-    const [collectionDesc, setCollectionDesc] = useState('')
-    const [collectionRoyalty, setCollectionRoyalty] = useState(5)
-    const [deployStatus, setDeployStatus] = useState<TxStatus>('idle')
-    const [deployError, setDeployError] = useState('')
-    const [deployedAddress, setDeployedAddress] = useState('')
-    const [savedCollectionAddress, setSavedCollectionAddress] = useState<string | null>(
-        () => getCollectionAddress()
-    )
     const [lastSyncedTon, setLastSyncedTon] = useState<string>('')
     const [lastSyncedEvm, setLastSyncedEvm] = useState<string>('')
 
@@ -330,49 +315,6 @@ const Wallet = () => {
     const resetWithdraw = () => {
         setWithdrawStatus('idle')
         setWithdrawError('')
-    }
-
-    // ── Deploy Collection handler ─────────────────────────
-    const handleDeployCollection = async () => {
-        if (!collectionName.trim()) return
-        if (!tonConnected || !tonAddress) return
-        setDeployStatus('loading')
-        setDeployError('')
-        try {
-            const { address, stateInitBoc, amount } = await buildCollectionDeployTransaction({
-                ownerAddress: tonRawAddress || tonAddress,
-                collectionName: collectionName.trim(),
-                collectionDescription: collectionDesc.trim(),
-                royaltyPercent: collectionRoyalty,
-            })
-
-            // ⚡ Save address BEFORE opening wallet — so if app reloads on redirect, address is persisted
-            saveCollectionAddress(address)
-            setDeployedAddress(address)
-            setSavedCollectionAddress(address)
-
-            await tonConnectUI.sendTransaction({
-                validUntil: Math.floor(Date.now() / 1000) + 600,
-                messages: [{
-                    address,
-                    amount: String(Math.floor(parseFloat(amount) * 1e9)),
-                    stateInit: stateInitBoc,
-                }],
-            })
-
-            setDeployStatus('success')
-            setDeployCollectionModal(false)
-            setDeploySuccessModal(true)
-            // Refresh balance and history after collection deploy
-            setTimeout(() => { fetchTonBalance(); fetchTonEvents() }, 4000)
-        } catch (err: any) {
-            setDeployStatus('error')
-            setDeployError(
-                err?.message?.includes('User declined')
-                    ? 'Cancelled by user.'
-                    : err?.message ?? 'Deployment failed. Try again.'
-            )
-        }
     }
 
     // ─────────────────────────────────────────────────────
@@ -616,8 +558,6 @@ const Wallet = () => {
                             </button>
                         )}
                     </div>
-
-                    <button onClick={() => setDeployCollectionModal(true)}>DEPLOY COLLECTION</button>
                 </>
             )}
 
@@ -876,113 +816,6 @@ const Wallet = () => {
                         className="w-full h-11 bg-[#6B6AFD] text-white rounded-xl text-sm font-semibold"
                     >
                         Done
-                    </button>
-                </div>
-            </Modal>
-
-            {/* ═══════════ DEPLOY COLLECTION MODAL ═══════════ */}
-            <Modal
-                className="bottom-0 absolute w-screen m-0 rounded-b-none"
-                position="bottom"
-                animation="slide-up"
-                isOpen={deployCollectionModal}
-                onClose={() => setDeployCollectionModal(false)}
-            >
-                <h2 className="text-center font-semibold text-xl text-[#0E0636]">Deploy NFT Collection</h2>
-                <p className="pt-2 pb-5 text-[#666F8B] text-center text-xs">
-                    Your collection contract will be deployed on TON {meta.env?.VITE_TON_NETWORK === 'testnet' ? 'Testnet' : 'Mainnet'}.
-                    Cost: ~0.05 TON
-                </p>
-
-                <label className="text-sm font-medium text-[#0E0636]">Collection Name *</label>
-                <input
-                    className="mt-2 mb-4 w-full h-[52px] border border-[#6B6AFD33] rounded-xl px-4 text-sm outline-none focus:border-[#6B6AFD] bg-[#6B6AFD0D]"
-                    placeholder="e.g. My Awesome NFTs"
-                    value={collectionName}
-                    onChange={e => setCollectionName(e.target.value)}
-                    maxLength={64}
-                />
-
-                <label className="text-sm font-medium text-[#0E0636]">Description</label>
-                <textarea
-                    className="mt-2 mb-4 w-full border border-[#6B6AFD33] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#6B6AFD] bg-[#6B6AFD0D] resize-none"
-                    placeholder="Describe your NFT collection..."
-                    rows={3}
-                    value={collectionDesc}
-                    onChange={e => setCollectionDesc(e.target.value)}
-                    maxLength={256}
-                />
-
-                <div className="mb-5">
-                    <div className="flex justify-between mb-2">
-                        <label className="text-sm font-medium text-[#0E0636]">Royalty</label>
-                        <span className="text-sm font-semibold text-[#6B6AFD]">{collectionRoyalty}%</span>
-                    </div>
-                    <input
-                        type="range"
-                        min={0} max={15} step={1}
-                        value={collectionRoyalty}
-                        onChange={e => setCollectionRoyalty(Number(e.target.value))}
-                        className="w-full accent-[#6B6AFD]"
-                    />
-                    <div className="flex justify-between text-[10px] text-[#666F8B] mt-1">
-                        <span>0%</span><span>5%</span><span>10%</span><span>15%</span>
-                    </div>
-                </div>
-
-                {deployError && (
-                    <div className="mb-4 bg-[#DA09091A] border border-[#DA090933] rounded-xl px-4 py-3">
-                        <p className="text-[#DA0909] text-xs">{deployError}</p>
-                    </div>
-                )}
-
-                <button
-                    onClick={handleDeployCollection}
-                    disabled={!collectionName.trim() || deployStatus === 'loading'}
-                    className="w-full bg-[#6B6AFD] text-white text-sm font-semibold rounded-xl h-[48px] flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                    {deployStatus === 'loading' ? (
-                        <>
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Deploying...
-                        </>
-                    ) : '🚀 Deploy Collection'}
-                </button>
-            </Modal>
-
-            {/* ═══════════ DEPLOY SUCCESS MODAL ═══════════ */}
-            <Modal isOpen={deploySuccessModal} onClose={() => setDeploySuccessModal(false)}>
-                <div className="text-center py-2">
-                    <div className="text-5xl mb-4">🎉</div>
-                    <p className="text-xl font-semibold text-[#0E0636]">Collection Deployed!</p>
-                    <p className="text-sm text-[#666F8B] pt-2 pb-4">
-                        Your NFT collection is live on TON blockchain. You can now mint NFTs into it.
-                    </p>
-                    <div className="bg-[#F5F7FB] rounded-xl px-4 py-3 mb-4 text-left">
-                        <p className="text-[10px] text-[#666F8B] mb-1">Collection Address</p>
-                        <p className="font-mono text-xs text-[#0E0636] break-all">{deployedAddress}</p>
-                    </div>
-                    <div className="flex gap-2 mb-3">
-                        <a
-                            href={`${TON_EXPLORER_COLLECTION}/address/${deployedAddress}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex-1 h-11 border border-[#6B6AFD] text-[#6B6AFD] text-sm font-semibold rounded-xl flex items-center justify-center"
-                        >
-                            View on Explorer ↗
-                        </a>
-                        <button
-                            onClick={() => copyToClipboard(deployedAddress)}
-                            className="flex-1 h-11 bg-[#6B6AFD0D] text-[#6B6AFD] text-sm font-semibold rounded-xl"
-                        >
-                            Copy Address
-                        </button>
-                    </div>
-                    <button
-                        onClick={() => { setDeploySuccessModal(false); navigate('/app/mint') }}
-                        className="w-full h-11 bg-[#6B6AFD] text-white rounded-xl text-sm font-semibold"
-                    >
-                        Go Mint Your First NFT →
                     </button>
                 </div>
             </Modal>
