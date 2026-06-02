@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import Modal from '../components/Modal'
+import { Address } from '@ton/core'
 import { useTonConnectUI, useTonAddress, useTonWallet } from '@tonconnect/ui-react'
 import { useTelegram } from '../contexts/TelegramContext'
 import { buildNftMintPayload, getNextItemIndex, TON_EXPLORER } from '../utils/tonNft'
@@ -276,13 +277,19 @@ const Mint = () => {
         updateStep(3, 'loading')
         // Use raw address (0:hex) for owner inside the payload — most compatible
         const ownerAddr = tonRawAddress || tonAddress
-        // TonAPI account events: prefer user-friendly wallet form for reliable indexing
-        const walletForSync = tonAddress || tonRawAddress || ''
+        // TonAPI account events: prefer raw hex format for reliable server-side matching
+        const walletForSync = tonRawAddress || tonAddress || ''
         const payload = buildNftMintPayload({ itemIndex, ownerAddress: ownerAddr, metadataUrl })
 
         // Normalize collection address to bounceable EQ... format — required by TON Connect
         const collectionAddr = normalizeCollectionAddress(COLLECTION_ADDRESS)
         if (!collectionAddr) throw new Error('Invalid collection address format')
+
+        // For backend verification, raw hex address is most stable across different user-friendly forms
+        let collectionRaw = COLLECTION_ADDRESS
+        try {
+            if (COLLECTION_ADDRESS) collectionRaw = Address.parse(COLLECTION_ADDRESS).toRawString()
+        } catch { /* fallback to original if parsing fails */ }
 
         // Persist pending mint before wallet open; allows recovery if app is backgrounded.
         savePendingMint({
@@ -303,7 +310,7 @@ const Mint = () => {
             price,
             imageUrl,
             metadataUrl,
-            collectionAddress: collectionAddr,
+            collectionAddress: collectionRaw || collectionAddr,
             walletAddress: walletForSync,
             tokenId: String(itemIndex),
         })

@@ -828,10 +828,18 @@ function parseTonAmount(value) {
 }
 
 function normalizeLooseAddress(addr) {
-  return String(addr || '')
+  let s = String(addr || '')
     .toLowerCase()
-    .replace(/^(0|0x):/, '')
-    .replace(/[^a-z0-9]/g, '')
+    .trim()
+  // Heuristic: TON user-friendly addresses are 48 chars and start with EQ, UQ, kQ, or 0Q.
+  // Stripping the first 2 characters allows matching the data portion if formats vary.
+  if (
+    s.length === 48 &&
+    (s.startsWith('eq') || s.startsWith('uq') || s.startsWith('kq') || s.startsWith('0q'))
+  ) {
+    s = s.slice(2)
+  }
+  return s.replace(/^(0|0x):/, '').replace(/[^a-z0-9]/g, '')
 }
 
 /** Returns true if any of the candidate strings match the target loosely. */
@@ -3563,11 +3571,25 @@ async function runPendingMintSyncJob() {
   if (pendingMintJobRunning) return
   pendingMintJobRunning = true
   try {
-    const pendings = await PendingMint.find({ status: { $in: ['pending', 'confirmed'] } })
+    // Pick pending mints that haven't been checked in the last 45 seconds.
+    // This prevents a few "broken" records from hogging the limit(25) every 30s cycle.
+    const backoffMs = 45000
+    const pendings = await PendingMint.find({
+      status: { $in: ['pending', 'confirmed'] },
+      $or: [
+        { lastCheckedAt: { $exists: false } },
+        { lastCheckedAt: null },
+        { lastCheckedAt: { $lt: new Date(Date.now() - backoffMs) } },
+      ],
+    })
       .sort({ createdAt: 1 })
       .limit(25)
     for (const pending of pendings) {
-      await reconcilePendingMint(pending)
+      try {
+        await reconcilePendingMint(pending)
+      } catch (err) {
+        console.error(`[pending-mint-job] error clientMintId=${pending.clientMintId}:`, err)
+      }
     }
   } catch (err) {
     console.error('[mint-sync-job]', err?.message || err)
