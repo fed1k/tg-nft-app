@@ -117,6 +117,8 @@ const userSchema = new mongoose.Schema(
   },
   commonOpts,
 )
+userSchema.index({ username: 1 }, { sparse: true })
+userSchema.index({ walletAddress: 1 }, { sparse: true })
 
 const referralRecordSchema = new mongoose.Schema(
   {
@@ -170,6 +172,9 @@ const assetSchema = new mongoose.Schema(
   },
   commonOpts,
 )
+assetSchema.index({ ownerUserId: 1 })
+assetSchema.index({ username: 1 })
+assetSchema.index({ marketTab: 1, status: 1 })
 
 const txSchema = new mongoose.Schema(
   {
@@ -825,7 +830,18 @@ function parseTonAmount(value) {
 function normalizeLooseAddress(addr) {
   return String(addr || '')
     .toLowerCase()
+    .replace(/^(0|0x):/, '')
     .replace(/[^a-z0-9]/g, '')
+}
+
+/** Returns true if any of the candidate strings match the target loosely. */
+function matchLooseAddress(target, ...candidates) {
+  if (!target) return false
+  const t = normalizeLooseAddress(target)
+  for (const c of candidates) {
+    if (c && normalizeLooseAddress(c) === t) return true
+  }
+  return false
 }
 
 function tonTransferRecipientAddress(action) {
@@ -942,29 +958,41 @@ async function verifyTonMintOnChain(pending) {
 
   const expectedNano = Math.floor(MINT_FEE_TON * 1e9)
   const tolerance = Math.max(Math.floor(0.02 * 1e9), Math.floor(expectedNano * 0.35))
-  const collectionNorm = normalizeLooseAddress(collectionAddress)
-  const walletNorm = normalizeLooseAddress(walletAddress)
   const createdAtMs = new Date(pending.createdAt).getTime()
-  const windowStartMs = Math.max(0, createdAtMs - 15 * 60 * 1000)
+  const windowStartMs = Number.isFinite(createdAtMs) ? Math.max(0, createdAtMs - 15 * 60 * 1000) : 0
 
   const scanEvents = (events, requireSenderEqWallet) => {
     for (const event of events) {
       const tsMs = Number(event?.timestamp || 0) * 1000
-      if (!tsMs || tsMs < windowStartMs) continue
+      if (!tsMs || (windowStartMs > 0 && tsMs < windowStartMs)) continue
       const actions = Array.isArray(event?.actions) ? event.actions : []
       for (const action of actions) {
         if (action?.type !== 'TonTransfer' || !action?.TonTransfer) continue
-        const recipient = normalizeLooseAddress(tonTransferRecipientAddress(action))
-        const sender = normalizeLooseAddress(tonTransferSenderAddress(action))
-        const amount = tonTransferAmountNano(action.TonTransfer)
-        if (recipient !== collectionNorm) continue
+        const tt = action.TonTransfer
+        const recObj = tt.recipient
+        const senderObj = tt.sender
+
+        // Robust address match: check both raw hex and user_friendly from TonAPI
+        const isRecMatch = matchLooseAddress(collectionAddress, recObj?.address, recObj?.user_friendly, typeof recObj === 'string' ? recObj : null)
+        if (!isRecMatch) continue
+
+        const amount = tonTransferAmountNano(tt)
+        const isAmountMatch = Math.abs(amount - expectedNano) <= tolerance
+
         if (requireSenderEqWallet) {
-          if (!walletNorm || !sender || sender !== walletNorm) continue
-        } else if (sender && walletNorm && sender !== walletNorm) {
-          continue
+          const isSenderMatch = matchLooseAddress(walletAddress, senderObj?.address, senderObj?.user_friendly, typeof senderObj === 'string' ? senderObj : null)
+          if (!isSenderMatch) continue
+        } else {
+          // Even if not strictly required, if both are present they should probably match
+          const isSenderMismatch = walletAddress && senderObj && !matchLooseAddress(walletAddress, senderObj?.address, senderObj?.user_friendly)
+          if (isSenderMismatch) continue
         }
-        if (Math.abs(amount - expectedNano) <= tolerance) {
+
+        if (isAmountMatch) {
+          console.log(`[verify-mint] SUCCESS hit! amount=${amount} expected=${expectedNano} txRef=${event.event_id}`)
           return { ok: true, txRef: String(event.event_id || pending.txRef || `event-${Date.now()}`) }
+        } else {
+          console.log(`[verify-mint] amount mismatch: got=${amount} expected=${expectedNano} tolerance=${tolerance} (event=${event.event_id})`)
         }
       }
     }
@@ -990,6 +1018,7 @@ async function verifyTonMintOnChain(pending) {
 }
 
 async function syncPendingMintToDb(pending) {
+  console.log(`[sync-pending] starting for clientMintId=${pending.clientMintId} title="${pending.title}"`)
   const actor = await resolveOrCreateActorUser({
     telegramId: pending.telegramId,
     firstName: pending.firstName,
@@ -1006,6 +1035,7 @@ async function syncPendingMintToDb(pending) {
 
   const existing = await AdminAsset.findOne({ tokenId: pending.tokenId || undefined, ownerUserId: actor._id, title: pending.title })
   if (existing) {
+    console.log(`[sync-pending] already exists assetId=${existing._id}`)
     pending.status = 'saved'
     pending.assetId = existing._id
     pending.lastCheckedAt = new Date()
@@ -1027,6 +1057,7 @@ async function syncPendingMintToDb(pending) {
     metadataUrl: pending.metadataUrl || undefined,
     collectionAddress: colSaved || undefined,
   })
+  console.log(`[sync-pending] SUCCESS created assetId=${assetDoc._id}`)
 
   try {
     const tid = pending.tokenId != null ? String(pending.tokenId).trim() : ''

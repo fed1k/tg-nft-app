@@ -3,7 +3,13 @@ import { useSearchParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTelegram } from '../contexts/TelegramContext'
 import { GiftStickerThumb } from '../components/GiftStickerThumb'
-import { giftCardSurfaceStyle } from '../utils/giftVisuals'
+import {
+  formatSendDate,
+  giftCardSurfaceStyle,
+  giftSubtitle,
+  giftTitle,
+  minListingPriceStars,
+} from '../utils/giftVisuals'
 import { sellGiftOnMarketplace, userClient } from '../services/user'
 import type { TelegramAvailableGift, TelegramOwnedGift } from '../services/user/client'
 

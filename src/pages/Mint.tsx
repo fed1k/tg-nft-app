@@ -328,43 +328,34 @@ const Mint = () => {
         localStorage.setItem(PENDING_TX_KEY, txRef)
         updateStep(3, 'done')
 
-        // Wallet returned success — unblock UI immediately (no waiting for DB / TonAPI)
-        updateStep(4, 'done')
-        setIsMinting(false)
-
-        void (async () => {
-            try {
-                const r = await userClient.resumePendingMint(clientMintId, txRef)
-                if (r.ok) {
-                    clearPendingMint()
-                    localStorage.removeItem(PENDING_TX_KEY)
-                    await queryClient.invalidateQueries({ queryKey: ['user-market'] })
-                    await queryClient.refetchQueries({ queryKey: ['user-market'] })
-                    return
-                }
-                if ('pending' in r && r.pending) {
-                    const retry = await pollMintListingSync(clientMintId, txRef, LISTING_SYNC_MAX_MS)
-                    if (retry.ok) {
+        // Wallet returned success — wait for backend to acknowledge receipt
+        updateStep(4, 'loading')
+        let syncOk = false
+        try {
+            const r = await userClient.resumePendingMint(clientMintId, txRef)
+            syncOk = r.ok
+            if (r.ok) {
+                updateStep(4, 'done')
+                clearPendingMint()
+                localStorage.removeItem(PENDING_TX_KEY)
+                void queryClient.invalidateQueries({ queryKey: ['user-market'] })
+                void queryClient.refetchQueries({ queryKey: ['user-market'] })
+            } else if ('pending' in r && r.pending) {
+                // Start background polling, but allow user to close modal
+                void pollMintListingSync(clientMintId, txRef, LISTING_SYNC_MAX_MS).then(res => {
+                    if (res.ok) {
                         clearPendingMint()
                         localStorage.removeItem(PENDING_TX_KEY)
-                        await queryClient.invalidateQueries({ queryKey: ['user-market'] })
-                        await queryClient.refetchQueries({ queryKey: ['user-market'] })
-                    } else {
-                        setRecoveryMessage(
-                            'Your NFT was minted. Listing sync is still pending — open the Market tab later or return to this screen.',
-                        )
+                        void queryClient.invalidateQueries({ queryKey: ['user-market'] })
                     }
-                    return
-                }
-                setRecoveryMessage(
-                    'Mint succeeded but the marketplace could not be updated. Try again shortly or contact support.',
-                )
-            } catch {
-                setRecoveryMessage(
-                    'Could not reach the server to finalize your listing. We will retry when you return to the app.',
-                )
+                })
             }
-        })()
+        } catch (err) {
+            console.error('[mint-sync-init] failed', err)
+        }
+
+        setIsMinting(false)
+        return { ok: syncOk }
     }, [imageFile, name, description, price, tonAddress, tonRawAddress, tonWallet, tonConnectUI, COLLECTION_ADDRESS, persistMintToBackend, pollMintListingSync, queryClient, platformFeeOnMintTon, feeReceiverWalletAddress, mintFeeTonNum])
 
     // ── Deploy Collection handler ─────────────────────────
@@ -425,12 +416,17 @@ const Mint = () => {
                 webApp.MainButton.setParams({ text: 'Minting...', is_active: false })
 
                 try {
-                    await doMint()
+                    const result = await doMint()
                     webApp.MainButton.hideProgress()
                     haptic('success')
+                    
+                    const msg = result?.ok 
+                        ? `"${name}" has been minted on TON Mainnet and is now live in the marketplace.`
+                        : `"${name}" was minted! We're currently syncing it to the marketplace — it will appear shortly.`
+
                     webApp.showPopup({
-                        title: '🎉 NFT Minted!',
-                        message: `"${name}" has been minted on TON Mainnet.\n\nView on tonscan.org`,
+                        title: result?.ok ? '🎉 NFT Minted!' : '⏳ Minting Syncing...',
+                        message: `${msg}\n\nView on tonscan.org`,
                         buttons: [
                             { id: 'home', type: 'default', text: 'Go to Home' },
                             { id: 'another', type: 'cancel', text: 'Mint Another' },
