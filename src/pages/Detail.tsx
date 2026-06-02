@@ -689,9 +689,21 @@ const Detail = () => {
                         <p className="text-xs text-[#DA0909]">Connect a TON wallet to send this NFT.</p>
                     )}
                     {!!effectiveNftItemAddress && ownerOkForGiftTransfer && (
-                        <p className="text-[10px] text-[#666F8B] break-all">
-                            Item contract: {effectiveNftItemAddress}
-                        </p>
+                        <div className="pt-2">
+                            <p className="text-[10px] text-[#666F8B] break-all">
+                                Item contract: {effectiveNftItemAddress}
+                            </p>
+                            {asset?.txHash && asset.txHash !== 'confirmed' && (
+                                <a
+                                    href={`https://${meta.env?.VITE_TON_NETWORK === 'testnet' ? 'testnet.' : ''}tonviewer.com/transaction/${asset.txHash}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-[10px] font-semibold text-[#6B6AFD] hover:underline block pt-1"
+                                >
+                                    View transaction on TonViewer ↗
+                                </a>
+                            )}
+                        </div>
                     )}
                 </div>
             ) : (

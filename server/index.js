@@ -169,12 +169,15 @@ const assetSchema = new mongoose.Schema(
       default: 'Pending',
     },
     ownerUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'AdminUser' },
+    /** On-chain transaction reference (hash or event_id) */
+    txHash: { type: String, trim: true },
   },
   commonOpts,
 )
 assetSchema.index({ ownerUserId: 1 })
 assetSchema.index({ username: 1 })
 assetSchema.index({ marketTab: 1, status: 1 })
+assetSchema.index({ txHash: 1 })
 
 const txSchema = new mongoose.Schema(
   {
@@ -383,6 +386,7 @@ function toAdminAsset(doc) {
     price: doc.price,
     status: doc.status,
     ownerUserId: doc.ownerUserId ? String(doc.ownerUserId) : undefined,
+    txHash: doc.txHash || undefined,
   }
 }
 
@@ -1064,6 +1068,7 @@ async function syncPendingMintToDb(pending) {
     tokenId: pending.tokenId || undefined,
     metadataUrl: pending.metadataUrl || undefined,
     collectionAddress: colSaved || undefined,
+    txHash: pending.txRef || undefined,
   })
   console.log(`[sync-pending] SUCCESS created assetId=${assetDoc._id}`)
 
@@ -1161,7 +1166,7 @@ async function reconcilePendingMint(pending) {
   }
 
   try {
-    if (MINT_REQUIRE_CHAIN_VERIFY) {
+    if (MINT_REQUIRE_CHAIN_VERIFY || !String(pending.txRef || '').trim()) {
       const verify = await verifyTonMintOnChain(pending)
       pending.lastCheckedAt = new Date()
       if (!verify.ok) {
@@ -1174,9 +1179,6 @@ async function reconcilePendingMint(pending) {
       pending.verifyError = undefined
       await pending.save()
     } else {
-      if (!String(pending.txRef || '').trim()) {
-        return { ok: false, state: 'pending', reason: 'waiting for wallet confirmation' }
-      }
       pending.lastCheckedAt = new Date()
       pending.verifyError = undefined
     }
