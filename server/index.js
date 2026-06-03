@@ -979,32 +979,68 @@ async function verifyTonMintOnChain(pending) {
       if (!tsMs || (windowStartMs > 0 && tsMs < windowStartMs)) continue
       const actions = Array.isArray(event?.actions) ? event.actions : []
       for (const action of actions) {
-        if (action?.type !== 'TonTransfer' || !action?.TonTransfer) continue
-        const tt = action.TonTransfer
-        const recObj = tt.recipient
-        const senderObj = tt.sender
+        // Check TonTransfer (plain TON send)
+        if (action?.type === 'TonTransfer' && action?.TonTransfer) {
+          const tt = action.TonTransfer
+          const recObj = tt.recipient
+          const senderObj = tt.sender
 
-        // Robust address match: check both raw hex and user_friendly from TonAPI
-        const isRecMatch = matchLooseAddress(collectionAddress, recObj?.address, recObj?.user_friendly, typeof recObj === 'string' ? recObj : null)
-        if (!isRecMatch) continue
+          const isRecMatch = matchLooseAddress(collectionAddress, recObj?.address, recObj?.user_friendly, typeof recObj === 'string' ? recObj : null)
+          if (!isRecMatch) continue
 
-        const amount = tonTransferAmountNano(tt)
-        const isAmountMatch = Math.abs(amount - expectedNano) <= tolerance
+          const amount = tonTransferAmountNano(tt)
+          const isAmountMatch = Math.abs(amount - expectedNano) <= tolerance
 
-        if (requireSenderEqWallet) {
-          const isSenderMatch = matchLooseAddress(walletAddress, senderObj?.address, senderObj?.user_friendly, typeof senderObj === 'string' ? senderObj : null)
-          if (!isSenderMatch) continue
-        } else {
-          // Even if not strictly required, if both are present they should probably match
-          const isSenderMismatch = walletAddress && senderObj && !matchLooseAddress(walletAddress, senderObj?.address, senderObj?.user_friendly)
-          if (isSenderMismatch) continue
+          if (requireSenderEqWallet) {
+            const isSenderMatch = matchLooseAddress(walletAddress, senderObj?.address, senderObj?.user_friendly, typeof senderObj === 'string' ? senderObj : null)
+            if (!isSenderMatch) continue
+          } else {
+            const isSenderMismatch = walletAddress && senderObj && !matchLooseAddress(walletAddress, senderObj?.address, senderObj?.user_friendly)
+            if (isSenderMismatch) continue
+          }
+
+          if (isAmountMatch) {
+            console.log(`[verify-mint] TonTransfer SUCCESS amount=${amount} expected=${expectedNano} txRef=${event.event_id}`)
+            return { ok: true, txRef: String(event.event_id || pending.txRef || `event-${Date.now()}`) }
+          } else {
+            console.log(`[verify-mint] TonTransfer amount mismatch: got=${amount} expected=${expectedNano} tolerance=${tolerance} (event=${event.event_id})`)
+          }
         }
 
-        if (isAmountMatch) {
-          console.log(`[verify-mint] SUCCESS hit! amount=${amount} expected=${expectedNano} txRef=${event.event_id}`)
-          return { ok: true, txRef: String(event.event_id || pending.txRef || `event-${Date.now()}`) }
-        } else {
-          console.log(`[verify-mint] amount mismatch: got=${amount} expected=${expectedNano} tolerance=${tolerance} (event=${event.event_id})`)
+        // Check SmartContractExec — NFT mint sends op=1 to collection, TonAPI classifies as SmartContractExec
+        if (action?.type === 'SmartContractExec' && action?.SmartContractExec) {
+          const sce = action.SmartContractExec
+          const contractObj = sce.contract
+          const executorObj = sce.executor
+
+          const isContractMatch = matchLooseAddress(collectionAddress, contractObj?.address, contractObj?.user_friendly, typeof contractObj === 'string' ? contractObj : null)
+          if (!isContractMatch) continue
+
+          if (walletAddress && executorObj) {
+            const isExecutorMatch = matchLooseAddress(walletAddress, executorObj?.address, executorObj?.user_friendly, typeof executorObj === 'string' ? executorObj : null)
+            if (!isExecutorMatch) continue
+          }
+
+          const tonAttached = Number(sce.ton_attached || 0)
+          const isAmountMatch = Math.abs(tonAttached - expectedNano) <= tolerance
+
+          if (isAmountMatch) {
+            console.log(`[verify-mint] SmartContractExec SUCCESS amount=${tonAttached} expected=${expectedNano} txRef=${event.event_id}`)
+            return { ok: true, txRef: String(event.event_id || pending.txRef || `event-${Date.now()}`) }
+          } else {
+            console.log(`[verify-mint] SmartContractExec amount mismatch: got=${tonAttached} expected=${expectedNano} tolerance=${tolerance} (event=${event.event_id})`)
+          }
+        }
+
+        // Check NftMint — some TonAPI versions emit this for collection deploys
+        if ((action?.type === 'NftMint' || action?.type === 'NftItemDeploy') && action?.[action.type]) {
+          const nm = action[action.type]
+          const collObj = nm.collection || nm.nft
+          const isColMatch = matchLooseAddress(collectionAddress, collObj?.address, collObj?.user_friendly, typeof collObj === 'string' ? collObj : null)
+          if (isColMatch) {
+            console.log(`[verify-mint] ${action.type} SUCCESS txRef=${event.event_id}`)
+            return { ok: true, txRef: String(event.event_id || pending.txRef || `event-${Date.now()}`) }
+          }
         }
       }
     }
@@ -1045,7 +1081,12 @@ async function syncPendingMintToDb(pending) {
   const listingUsername = actor.username || fallbackHandle
   const actorLabel = listingUsername || actor.name
 
-  const existing = await AdminAsset.findOne({ tokenId: pending.tokenId || undefined, ownerUserId: actor._id, title: pending.title })
+  const colSaved = String(pending.collectionAddress || '').trim()
+
+  const existingQuery = pending.tokenId
+    ? { tokenId: String(pending.tokenId), ownerUserId: actor._id }
+    : { ownerUserId: actor._id, title: pending.title, ...(colSaved ? { collectionAddress: colSaved } : {}) }
+  const existing = await AdminAsset.findOne(existingQuery)
   if (existing) {
     console.log(`[sync-pending] already exists assetId=${existing._id}`)
     pending.status = 'saved'
@@ -1054,8 +1095,6 @@ async function syncPendingMintToDb(pending) {
     await pending.save()
     return existing
   }
-
-  const colSaved = String(pending.collectionAddress || '').trim()
   const assetDoc = await AdminAsset.create({
     nft: pending.image || '/crystal-cube.jpg',
     title: pending.title,

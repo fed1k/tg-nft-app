@@ -204,7 +204,9 @@ const Mint = () => {
                 localStorage.removeItem(PENDING_TX_KEY)
                 setRecoveryMessage(`Recovered and synced "${pending.name}" after wallet return.`)
                 await queryClient.invalidateQueries({ queryKey: ['user-market'] })
+                await queryClient.invalidateQueries({ queryKey: ['user-home'] })
                 await queryClient.refetchQueries({ queryKey: ['user-market'] })
+                await queryClient.refetchQueries({ queryKey: ['user-home'] })
             }
         } catch {
             // leave pending data for next retry cycle
@@ -346,7 +348,9 @@ const Mint = () => {
                 clearPendingMint()
                 localStorage.removeItem(PENDING_TX_KEY)
                 void queryClient.invalidateQueries({ queryKey: ['user-market'] })
+                void queryClient.invalidateQueries({ queryKey: ['user-home'] })
                 void queryClient.refetchQueries({ queryKey: ['user-market'] })
+                void queryClient.refetchQueries({ queryKey: ['user-home'] })
             } else if ('pending' in r && r.pending) {
                 // Start background polling, but allow user to close modal
                 void pollMintListingSync(clientMintId, txRef, LISTING_SYNC_MAX_MS).then(res => {
@@ -354,6 +358,7 @@ const Mint = () => {
                         clearPendingMint()
                         localStorage.removeItem(PENDING_TX_KEY)
                         void queryClient.invalidateQueries({ queryKey: ['user-market'] })
+                        void queryClient.invalidateQueries({ queryKey: ['user-home'] })
                     }
                 })
             }
@@ -550,7 +555,9 @@ const Mint = () => {
                         localStorage.removeItem(PENDING_TX_KEY)
                         setRecoveryMessage(`Recovered and synced "${pending.name}" after wallet return.`)
                         void queryClient.invalidateQueries({ queryKey: ['user-market'] })
+                        void queryClient.invalidateQueries({ queryKey: ['user-home'] })
                         void queryClient.refetchQueries({ queryKey: ['user-market'] })
+                        void queryClient.refetchQueries({ queryKey: ['user-home'] })
                     }
                 }).catch(() => {
                     // keep retrying on next resume
