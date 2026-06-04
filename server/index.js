@@ -585,6 +585,37 @@ async function resolveAdminAccess(telegramIdRaw, usernameRaw) {
   return { authorized: false, via: null }
 }
 
+/** Escape all regex metacharacters so user input is treated as a literal string. */
+function escapeRegex(s) {
+  return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Fee calculation using integer nanoton arithmetic to avoid floating-point drift.
+ * Returns the fee in TON (float), computed without rounding error.
+ */
+function calcFeeTon(priceTon, feePercent) {
+  const priceNano = Math.round(Number(priceTon) * 1e9)
+  const feeNano = Math.floor(priceNano * Number(feePercent) / 100)
+  return feeNano / 1e9
+}
+
+/**
+ * Returns true for superficially valid TON or EVM wallet address formats.
+ * Does NOT verify ownership — just prevents storing obviously bad strings.
+ */
+function isValidWalletAddressFormat(addr) {
+  if (!addr) return false
+  const s = String(addr).trim()
+  // TON user-friendly: 48 chars starting with EQ/UQ/kQ/0Q
+  if (/^[EUk0][Qq][A-Za-z0-9_-]{46}$/.test(s)) return true
+  // TON raw: 0:<64 hex>
+  if (/^0:[0-9a-fA-F]{64}$/.test(s)) return true
+  // EVM: 0x + 40 hex
+  if (/^0x[0-9a-fA-F]{40}$/.test(s)) return true
+  return false
+}
+
 function normalizeReferralCode(input) {
   const raw = String(input || '').trim().replace(/^#/, '')
   if (!raw) return ''
@@ -1141,11 +1172,14 @@ async function syncPendingMintToDb(pending) {
     timeBadge: 'Now',
   })
 
-  // Handle legit referral completion on first mint
-  if (!actor.hasMinted) {
-    actor.hasMinted = true
-    await actor.save()
-
+  // Atomically flip hasMinted. findOneAndUpdate returns null if hasMinted was already true,
+  // preventing double-credit on concurrent mint requests for the same user.
+  const mintFlip = await AdminUser.findOneAndUpdate(
+    { _id: actor._id, hasMinted: false },
+    { $set: { hasMinted: true } },
+    { new: false },
+  )
+  if (mintFlip) {
     let referral = await AdminReferral.findOne({ invitedId: actor._id, status: 'Pending' })
     let inviterId = referral?.inviterId
 
@@ -1205,22 +1239,23 @@ async function reconcilePendingMint(pending) {
   }
 
   try {
-    if (MINT_REQUIRE_CHAIN_VERIFY || !String(pending.txRef || '').trim()) {
-      const verify = await verifyTonMintOnChain(pending)
-      pending.lastCheckedAt = new Date()
-      if (!verify.ok) {
+    // Always verify on-chain. MINT_REQUIRE_CHAIN_VERIFY controls hard-fail vs soft-continue.
+    const verify = await verifyTonMintOnChain(pending)
+    pending.lastCheckedAt = new Date()
+    if (!verify.ok) {
+      if (MINT_REQUIRE_CHAIN_VERIFY) {
         pending.verifyError = verify.reason
         await pending.save()
         return { ok: false, state: 'pending', reason: verify.reason }
       }
-      pending.status = 'confirmed'
-      pending.txRef = verify.txRef || pending.txRef
-      pending.verifyError = undefined
-      await pending.save()
+      // Soft mode: log and continue — listing is created optimistically.
+      console.warn(`[verify-mint] soft-mode chain verify failed (${verify.reason}), proceeding without on-chain confirmation`)
     } else {
-      pending.lastCheckedAt = new Date()
-      pending.verifyError = undefined
+      pending.txRef = verify.txRef || pending.txRef
     }
+    pending.status = 'confirmed'
+    pending.verifyError = undefined
+    await pending.save()
 
     const asset = await syncPendingMintToDb(pending)
     return { ok: true, state: 'saved', asset: toAdminAsset(asset) }
@@ -1389,7 +1424,7 @@ function validateTelegramWebAppInitData(initData, botToken, maxAgeSec = 86400) {
 }
 
 async function adminAuthMiddleware(req, res, next) {
-  if (req.path === '/health' || req.path === '/access-check') return next()
+  if (req.path === '/health') return next()
   
   const initData = req.headers['x-telegram-init-data'] || req.body?.initData || req.query?.initData
   if (!initData) {
@@ -1421,10 +1456,10 @@ app.get('/api/admin/health', async (_req, res) => {
   res.json({ ok: true, users })
 })
 
-/** Mini App admin gate: staff added in Control → Admins (MongoDB). */
-app.post('/api/admin/access-check', async (req, res) => {
-  const result = await resolveAdminAccess(req.body?.telegramId, req.body?.username)
-  res.json(result)
+/** Mini App admin gate: staff added in Control → Admins (MongoDB). initData already verified by adminAuthMiddleware. */
+app.post('/api/admin/access-check', async (_req, res) => {
+  // _req._adminId is set by adminAuthMiddleware after successful initData validation + staff check.
+  res.json({ authorized: true, via: 'initData_verified' })
 })
 
 app.get('/api/admin/referrals/leaderboard', async (req, res) => {
@@ -1527,7 +1562,7 @@ app.get('/api/admin/users', async (req, res) => {
   }
 
   if (search) {
-    const rx = new RegExp(String(search), 'i')
+    const rx = new RegExp(escapeRegex(String(search)), 'i')
     query.$or = [
       { name: rx },
       { email: rx },
@@ -1578,7 +1613,7 @@ app.get('/api/admin/assets', async (req, res) => {
     query.status = status
   }
   if (search) {
-    const rx = new RegExp(String(search), 'i')
+    const rx = new RegExp(escapeRegex(String(search)), 'i')
     query.$or = [{ title: rx }, { username: rx }]
   }
 
@@ -1620,7 +1655,7 @@ app.get('/api/admin/transactions', async (req, res) => {
   const query = {}
   if (type && type !== 'All') query.type = type
   if (search) {
-    const rx = new RegExp(String(search), 'i')
+    const rx = new RegExp(escapeRegex(String(search)), 'i')
     query.$or = [{ name: rx }, { fromUser: rx }, { toUser: rx }]
   }
 
@@ -1713,6 +1748,13 @@ app.patch('/api/admin/settings', async (req, res) => {
   const patch = {}
   for (const key of allowed) {
     if (key in req.body) patch[key] = req.body[key]
+  }
+  if ('platformFeePercent' in patch) {
+    const feeVal = Number(patch.platformFeePercent)
+    if (!Number.isFinite(feeVal) || feeVal < 0 || feeVal > 100) {
+      return res.status(400).json({ message: 'platformFeePercent must be a number between 0 and 100' })
+    }
+    patch.platformFeePercent = feeVal
   }
 
   Object.assign(settings, patch)
@@ -2306,8 +2348,8 @@ app.post('/api/user/gift-listings', async (req, res) => {
       })
     }
   } else {
-    const platformFeeTon = Number(((priceTon * platformFeePercent) / 100).toFixed(9))
-    const sellerPayoutTon = Number(Math.max(0, priceTon - platformFeeTon).toFixed(9))
+    const platformFeeTon = calcFeeTon(priceTon, platformFeePercent)
+    const sellerPayoutTon = Math.max(0, priceTon - platformFeeTon)
     if (sellerPayoutTon <= 0) {
       return res.status(400).json({ message: 'Price too low after platform fee — increase priceTon.' })
     }
@@ -2322,6 +2364,11 @@ app.post('/api/user/gift-listings', async (req, res) => {
     if (!w || normalizeLooseAddress(w).length < 24) {
       return res.status(400).json({
         message: 'Connect a wallet under Wallet before listing gifts for TON-priced sales (TON or EVM payout address).',
+      })
+    }
+    if (!isValidWalletAddressFormat(w)) {
+      return res.status(400).json({
+        message: 'Your saved wallet address has an unrecognized format. Reconnect your TON or EVM wallet under Wallet.',
       })
     }
 
@@ -2358,9 +2405,11 @@ app.post('/api/user/gift-listings', async (req, res) => {
   const stickerFileId = thumb.file_id || (mainStatic ? st.file_id : null) || undefined
 
   const label = String(rawGift.text || `Gift ${gid}`).trim().slice(0, 120)
-  const sellerUsername = String(userUnsafe?.username || '')
-    ? `@${String(userUnsafe.username).replace(/^@/, '')}`
-    : ''
+  // Prefer DB-stored username (verified identity) over initData userUnsafe field (display-only).
+  const dbSellerRow = await AdminUser.findOne({ telegramId: telegramUserId }).select('username').lean()
+  const sellerUsername = dbSellerRow?.username
+    ? sanitizeUsername(dbSellerRow.username)
+    : (userUnsafe?.username ? sanitizeUsername(userUnsafe.username) : '')
 
   const doc = await GiftListing.create({
     sellerTelegramId: telegramUserId,
@@ -2569,8 +2618,8 @@ app.post('/api/user/gift-listings/:id/buy', async (req, res) => {
       }
 
       const priceTon = Number(priceTonListed)
-      const platformFeeTon = Number(((priceTon * platformFeePercent) / 100).toFixed(9))
-      const sellerPayoutTon = Number(Math.max(0, priceTon - platformFeeTon).toFixed(9))
+      const platformFeeTon = calcFeeTon(priceTon, platformFeePercent)
+      const sellerPayoutTon = Math.max(0, priceTon - platformFeeTon)
       const feeReceiver = String(settings.feeReceiverWalletAddress || '').trim()
 
       if (platformFeeTon > 0 && !feeReceiver) {
@@ -2616,22 +2665,25 @@ app.post('/api/user/gift-listings/:id/buy', async (req, res) => {
       return res.status(409).json({ message: 'Listing price no longer covers Telegram fees. Ask seller to update.' })
     }
 
-    const buyerStarsBefore = Number(buyer.stars) || 0
-    if (buyerStarsBefore < priceStars) {
+    // Atomically deduct Stars — the condition { stars: { $gte: priceStars } } makes balance check+deduct a single op.
+    const debitResult = await AdminUser.findOneAndUpdate(
+      { _id: buyer._id, stars: { $gte: priceStars } },
+      { $inc: { stars: -priceStars } },
+      { new: true },
+    )
+    if (!debitResult) {
       await unlock()
+      const currentBalance = Number(buyer.stars) || 0
       return res.status(400).json({
-        message: `Insufficient Stars (need ${priceStars}, have ${buyerStarsBefore}). Top up in Wallet.`,
+        message: `Insufficient Stars (need ${priceStars}, have ${currentBalance}). Top up in Wallet.`,
       })
     }
-
-    buyer.stars = buyerStarsBefore - priceStars
-    await buyer.save()
 
     try {
       await sendGiftMarketplaceDeliver(buyerTelegramId, listingDoc.giftId)
     } catch (err) {
-      buyer.stars = buyerStarsBefore
-      await buyer.save()
+      // Atomically refund — safe even if the process was interrupted mid-flight.
+      await AdminUser.updateOne({ _id: buyer._id }, { $inc: { stars: priceStars } })
       await unlock()
       return res.status(502).json({ message: err?.message || 'Telegram could not deliver the gift.' })
     }
@@ -2945,9 +2997,15 @@ app.post('/api/user/session', async (req, res) => {
 
 app.post('/api/user/mint', async (req, res) => {
   const payload = createPendingMintPayload(req.body || {})
+  // Core financial fields use $setOnInsert so a retry can never change priceTon/walletAddress/collectionAddress.
+  // status and verifyError are internal state — excluded from $set to avoid a MongoDB write-conflict.
+  const { clientMintId, priceTon, walletAddress, collectionAddress, title, status: _s, verifyError: _ve, ...mutableFields } = payload
   const pending = await PendingMint.findOneAndUpdate(
-    { clientMintId: payload.clientMintId },
-    { $set: payload },
+    { clientMintId },
+    {
+      $setOnInsert: { clientMintId, priceTon, walletAddress, collectionAddress, title, status: 'pending' },
+      $set: mutableFields,
+    },
     { upsert: true, new: true, setDefaultsOnInsert: true },
   )
   const result = await reconcilePendingMint(pending)
@@ -2971,9 +3029,13 @@ app.post('/api/user/mint', async (req, res) => {
 
 app.post('/api/user/mint/pending', async (req, res) => {
   const payload = createPendingMintPayload(req.body || {})
+  const { clientMintId, priceTon, walletAddress, collectionAddress, title, status: _s, verifyError: _ve, ...mutableFields } = payload
   const pending = await PendingMint.findOneAndUpdate(
-    { clientMintId: payload.clientMintId },
-    { $set: payload },
+    { clientMintId },
+    {
+      $setOnInsert: { clientMintId, priceTon, walletAddress, collectionAddress, title, status: 'pending' },
+      $set: mutableFields,
+    },
     { upsert: true, new: true, setDefaultsOnInsert: true },
   )
   console.log(`[${req._rid}] mint-pending created clientMintId=${pending.clientMintId}`)
@@ -3033,7 +3095,7 @@ app.get('/api/user/market', async (req, res) => {
   }
 
   if (search) {
-    const rx = new RegExp(String(search), 'i')
+    const rx = new RegExp(escapeRegex(String(search)), 'i')
     andClauses.push({ $or: [{ title: rx }, { username: rx }] })
   }
 
@@ -3057,7 +3119,7 @@ app.get('/api/nfts', async (req, res) => {
     query.category = category
   }
   if (search) {
-    const rx = new RegExp(String(search), 'i')
+    const rx = new RegExp(escapeRegex(String(search)), 'i')
     andClauses.push({ $or: [{ title: rx }, { username: rx }] })
   }
   if (andClauses.length) query.$and = andClauses
@@ -3237,8 +3299,8 @@ app.post('/api/user/assets/:id/buy', async (req, res) => {
   }
 
   const feeReceiver = String(settings.feeReceiverWalletAddress || '').trim()
-  const platformFeeTon = Number(((priceTon * platformFeePercent) / 100).toFixed(6))
-  const sellerPayoutTon = Number(Math.max(0, priceTon - platformFeeTon).toFixed(6))
+  const platformFeeTon = calcFeeTon(priceTon, platformFeePercent)
+  const sellerPayoutTon = Math.max(0, priceTon - platformFeeTon)
   if (platformFeeTon > 0 && !feeReceiver) {
     return res.status(409).json({ message: 'Platform fee receiver wallet is not configured by admin' })
   }

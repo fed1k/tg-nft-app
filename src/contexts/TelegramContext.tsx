@@ -196,18 +196,28 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
     if (tg.initDataUnsafe?.user) {
       const tgUser = tg.initDataUnsafe.user;
       setAccessState('loading');
-      syncUserSession(tgUser, tg.initDataUnsafe?.start_param)
-        .then(() => {
-          setAccessState('allowed');
-          setBlockMessage(null);
-          setBlockStatus(null);
-        })
-        .catch((err) => {
-          if (!applyBlockFromError(err)) {
-            console.warn('user-session-sync-failed', err);
+
+      // Wait until initData is populated before syncing — it may be empty on the very first tick.
+      const attemptSync = (attemptsLeft: number) => {
+        const currentInitData = typeof tg.initData === 'string' ? tg.initData : '';
+        if (!currentInitData && attemptsLeft > 0) {
+          window.setTimeout(() => attemptSync(attemptsLeft - 1), 150);
+          return;
+        }
+        syncUserSession(tgUser, tg.initDataUnsafe?.start_param)
+          .then(() => {
             setAccessState('allowed');
-          }
-        });
+            setBlockMessage(null);
+            setBlockStatus(null);
+          })
+          .catch((err) => {
+            if (!applyBlockFromError(err)) {
+              console.warn('user-session-sync-failed', err);
+              setAccessState('allowed');
+            }
+          });
+      };
+      attemptSync(4);
     } else {
       setAccessState('allowed');
     }

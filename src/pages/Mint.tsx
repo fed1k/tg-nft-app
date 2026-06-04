@@ -85,22 +85,28 @@ const Mint = () => {
     const mintFeeTonNum = Number.parseFloat(MINT_FEE) || 0
     const platformFeeOnMintTon = Number(((mintFeeTonNum * platformFeePercent) / 100).toFixed(6))
 
-    // Collection address — reactive: re-reads localStorage whenever the user returns to this tab
-    const [COLLECTION_ADDRESS, setCollectionAddress] = useState<string | null>(() => getCollectionAddress(platformSettings?.collectionAddress))
+    // Collection address — derives from env var → localStorage → admin settings, in priority order.
+    // Recomputed on every render so it picks up platformSettings as soon as the query resolves.
+    const COLLECTION_ADDRESS = getCollectionAddress(platformSettings?.collectionAddress)
+
+    // Keep localStorage in sync when a deployed address is saved by the deploy flow.
+    // Also re-read on tab focus so returning from Tonkeeper picks up a freshly saved address.
+    const [, forceRefresh] = useState(0)
     useEffect(() => {
-        const refresh = () => {
-            const addr = getCollectionAddress(platformSettings?.collectionAddress)
-            if (addr) setCollectionAddress(addr)
-        }
-        refresh()
-        // Re-check when tab gains focus (user returns from wallet or wallet page)
+        const refresh = () => forceRefresh(n => n + 1)
         window.addEventListener('focus', refresh)
         document.addEventListener('visibilitychange', refresh)
         return () => {
             window.removeEventListener('focus', refresh)
             document.removeEventListener('visibilitychange', refresh)
         }
-    }, [platformSettings?.collectionAddress])
+    }, [])
+
+    // setCollectionAddress is still used by the deploy flow to persist to localStorage immediately.
+    const setCollectionAddress = (addr: string) => {
+        saveCollectionAddress(addr)
+        forceRefresh(n => n + 1)
+    }
 
     // Form state
     const [name, setName] = useState('')
@@ -131,7 +137,7 @@ const Mint = () => {
     const [deployError, setDeployError] = useState('')
     const [deployedAddress, setDeployedAddress] = useState('')
 
-    const isFormValid = !!name.trim() && !!price.trim() && !!imageFile && walletConnected
+    const isFormValid = !!name.trim() && !!price.trim() && !!imageFile && walletConnected && !!COLLECTION_ADDRESS
 
     // ── Step helpers ───────────────────────────────────────────
     const updateStep = (i: number, status: MintStep['status']) =>
@@ -388,9 +394,8 @@ const Mint = () => {
             })
 
             // ⚡ Save address BEFORE opening wallet — so if app reloads on redirect, address is persisted
-            saveCollectionAddress(address)
+            setCollectionAddress(address) // persists to localStorage + triggers re-render
             setDeployedAddress(address)
-            setCollectionAddress(address) // Update local state so Mint UI refreshes
 
             await tonConnectUI.sendTransaction({
                 validUntil: Math.floor(Date.now() / 1000) + 600,

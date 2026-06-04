@@ -540,11 +540,15 @@ export const userClient = {
   > => {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), MINT_RESUME_TIMEOUT_MS)
+    const initData = (window as any).Telegram?.WebApp?.initData || ''
     let res: Response
     try {
       res = await fetch(`${API_BASE}/mint/resume`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Telegram-Init-Data': initData,
+        },
         body: JSON.stringify({ clientMintId, txRef }),
         signal: controller.signal,
       })
