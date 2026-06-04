@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTelegram } from '../contexts/TelegramContext'
@@ -6,10 +6,12 @@ import { useTonAddress } from '@tonconnect/ui-react'
 import { useAccount } from 'wagmi'
 import { userClient } from '../services/user'
 import { displayHandle } from '../utils/displayHandle'
+import { useLanguage } from '../contexts/LanguageContext'
 
 const Offers = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { t } = useLanguage()
   const { user } = useTelegram()
   const tonAddress = useTonAddress()
   const tonRawAddress = useTonAddress(false)
@@ -25,16 +27,6 @@ const Offers = () => {
     staleTime: 10_000,
   })
 
-  // Local placeholders for testing
-  // const mockOffers: any[] = tab === 'received' ? [
-  //   { id: 'mock-r1', title: 'Cyber Bear #42', amount: '1.5 TON', status: 'Pending', direction: 'received', fromUser: '@crypto_king', fromUserName: 'Crypto King', fromUserPic: '/avatari.png', toUser: 'You', timeLabel: '5m' },
-  //   { id: 'mock-r2', title: 'Golden Star Gift', amount: '500 Stars', status: 'Accepted', direction: 'received', fromUser: '@gift_master', fromUserName: 'Gift Master', fromUserPic: '/avatari.png', toUser: 'You', timeLabel: '1h' },
-  //   { id: 'mock-r3', title: 'Rare Diamond', amount: '0.8 TON', status: 'Rejected', direction: 'received', fromUser: '@seller_x', fromUserName: 'Seller X', fromUserPic: '/avatari.png', toUser: 'You', timeLabel: '2h' },
-  // ] : [
-  //   { id: 'mock-s1', title: 'Neon Fox #1', amount: '1.2 TON', status: 'Pending', direction: 'sent', fromUser: 'You', toUser: '@collector_a', toUserName: 'Collector A', toUserPic: '/avatari.png', timeLabel: '10m' },
-  //   { id: 'mock-s2', title: 'Space Cat', amount: '3.0 TON', status: 'Accepted', direction: 'sent', fromUser: 'You', toUser: '@whale_z', toUserName: 'Whale Z', toUserPic: '/avatari.png', timeLabel: '1d' },
-  //   { id: 'mock-s3', title: 'Fire Dragon', amount: '0.5 TON', status: 'Rejected', direction: 'sent', fromUser: 'You', toUser: '@art_fan', toUserName: 'Art Fan', toUserPic: '/avatari.png', timeLabel: '3d' },
-  // ]
 
   const offers = remoteOffers.length > 0 ? remoteOffers : []
 
@@ -69,10 +61,10 @@ const Offers = () => {
   return (
     <div className="px-3 pb-28 pt-12">
       <div className="flex items-center gap-3 pt-2 pb-6 relative justify-center">
-        <button type="button" onClick={() => navigate("/app/profile")} className="p-1 absolute left-3" aria-label="Back">
+        <button type="button" onClick={() => navigate("/app/profile")} className="p-1 absolute left-3" aria-label={t('common.back')}>
           <img className="w-6 h-6" src="/arrow-left.svg" alt="" />
         </button>
-        <h1 className="text-lg font-medium text-[#0E0636]">Offers</h1>
+        <h1 className="text-lg font-medium text-[#0E0636]">{t('offers.title')}</h1>
       </div>
 
       <div className="border flex h-11 relative border-[#666F8B33] p-1 rounded-xl mb-12">
@@ -85,7 +77,7 @@ const Offers = () => {
           onClick={() => setTab('received')}
           className={`z-10 cursor-pointer text-sm flex items-center gap-1.5 justify-center flex-1 ${tab === 'received' ? 'text-white' : 'text-[#666F8B]'}`}
         >
-          <p>Received</p>
+          <p>{t('offers.received')}</p>
         </button>
 
         <button
@@ -93,22 +85,22 @@ const Offers = () => {
           onClick={() => setTab('sent')}
           className={`z-10 cursor-pointer text-sm flex items-center gap-1.5 justify-center flex-1 ${tab === 'sent' ? 'text-white' : 'text-[#666F8B]'}`}
         >
-          <p>Sent</p>
+          <p>{t('offers.sent')}</p>
         </button>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-[#666F8B]">Loading offers...</p>
+        <p className="text-sm text-[#666F8B]">{t('offers.loading')}</p>
       ) : isError ? (
-        <p className="text-sm text-[#DA0909]">Failed to load offers.</p>
+        <p className="text-sm text-[#DA0909]">{t('offers.failed')}</p>
       ) : offers.length === 0 ? (
-        <p className="text-sm text-[#666F8B]">No offers found for this view.</p>
+        <p className="text-sm text-[#666F8B]">{t('offers.empty')}</p>
       ) : (
         <div className="space-y-6">
           {offers.map((offer) => {
             const isSent = offer.direction === 'sent'
-            const userPic = isSent ? (offer?.toUserPic || '/white-man.jpg') : (offer?.fromUserPic || '/white-man.jpg')
-            const fullName = isSent ? (offer?.toUserName || displayHandle(offer.toUser)) : (offer?.fromUserName || displayHandle(offer.fromUser))
+            const userPic = '/white-man.jpg'
+            const fullName = isSent ? displayHandle(offer.toUser) : displayHandle(offer.fromUser)
 
             return (
               <div
@@ -152,13 +144,13 @@ const Offers = () => {
                         onClick={() => handleAction('decline', offer.id)}
                         className="flex-1 border border-[#6B6AFD] text-[#6B6AFD] py-2.5 rounded-lg text-xs font-semibold hover:bg-[#DA09090D] transition-colors"
                       >
-                        Decline
+                        {t('offers.decline')}
                       </button>
                       <button
                         onClick={() => handleAction('accept', offer.id)}
                         className="flex-1 bg-[#6B6AFD] text-white py-2.5 rounded-lg text-xs font-semibold hover:bg-[#5856D6] transition-colors"
                       >
-                        Accept
+                        {t('offers.accept')}
                       </button>
                     </div>
                   )}
@@ -168,7 +160,7 @@ const Offers = () => {
                       onClick={() => handleAction('cancel', offer.id)}
                       className="w-full bg-white mt-4 border border-[#666F8B33] text-[#666F8B] py-2.5 rounded-lg text-xs font-medium hover:bg-[#666F8B0D] transition-colors"
                     >
-                      Cancel Offer
+                      {t('offers.cancel')}
                     </button>
                   )}
 
@@ -177,7 +169,7 @@ const Offers = () => {
                       onClick={() => navigate(`/asset/${offer.assetId}`)}
                       className="w-full bg-[#6B6AFD] text-white mt-4 py-2.5 rounded-lg text-xs font-semibold hover:bg-[#5856D6] transition-colors"
                     >
-                      Complete Purchase →
+                      {t('offers.complete')}
                     </button>
                   )}
 
@@ -188,7 +180,7 @@ const Offers = () => {
                       }}
                       className="w-full mt-4 border border-[#666F8B33] text-[#666F8B] py-2.5 rounded-lg text-xs font-medium hover:bg-[#666F8B0D] transition-colors"
                     >
-                      Re-offer
+                      {t('offers.re_offer')}
                     </button>
                   )}
                 </div>

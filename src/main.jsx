@@ -7,6 +7,7 @@ import { RouterProvider } from 'react-router/dom'
 
 // Telegram Mini App
 import { TelegramProvider } from './contexts/TelegramContext'
+import { LanguageProvider } from './contexts/LanguageContext'
 
 // TON Connect
 import { TonConnectUIProvider } from '@tonconnect/ui-react'
@@ -45,6 +46,7 @@ import AdminUsers from './pages/admin/AdminUsers.tsx'
 import AdminAssets from './pages/admin/AdminAssets.tsx'
 import AdminActivity from './pages/admin/AdminActivity.tsx'
 import AdminControl from './pages/admin/AdminControl.tsx'
+import Languages from './pages/Languages.tsx'
 
 // --- Wagmi / RainbowKit config ---
 const wagmiConfig = getDefaultConfig({
@@ -86,6 +88,14 @@ const router = createBrowserRouter([
     element: (
       <RequireAppAccess>
         <Offers />
+      </RequireAppAccess>
+    ),
+  },
+  {
+    path: '/languages',
+    element: (
+      <RequireAppAccess>
+        <Languages />
       </RequireAppAccess>
     ),
   },
@@ -157,7 +167,9 @@ createRoot(document.getElementById('root')).render(
           })}
         >
           <TelegramProvider>
-            <RouterProvider router={router} />
+            <LanguageProvider>
+              <RouterProvider router={router} />
+            </LanguageProvider>
           </TelegramProvider>
         </RainbowKitProvider>
       </QueryClientProvider>

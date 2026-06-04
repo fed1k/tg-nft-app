@@ -1,4 +1,3 @@
-import React from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import NftCard from '../components/NftCard'
@@ -6,6 +5,7 @@ import { useTelegram } from '../contexts/TelegramContext'
 import { useTonAddress } from '@tonconnect/ui-react'
 import { useAccount } from 'wagmi'
 import { userClient } from '../services/user'
+import { useLanguage } from '../contexts/LanguageContext'
 
 const meta = import.meta as ImportMeta & { env?: Record<string, string | undefined> }
 const IS_TESTNET = meta.env?.VITE_TON_NETWORK === 'testnet'
@@ -13,6 +13,7 @@ const TON_API_BASE = IS_TESTNET ? 'https://testnet.tonapi.io' : 'https://tonapi.
 
 const Home = () => {
     const navigate = useNavigate()
+    const { t } = useLanguage()
     const { user, isInTelegram, initData } = useTelegram()
 
     // Wallet states
@@ -81,13 +82,13 @@ const Home = () => {
     return (
         <div className="px-3 pb-24">
             <p className="text-xs ml-3 lg:text-sm pb-2 border-b-2 inline text-[#0E0636] border-[#0E06361A]">
-                Welcome back, {displayName} 👋
+                {t('home.welcome')} {displayName} 👋
             </p>
 
             {/* Balance Card */}
             <div className="bg-[#6B6AFD] rounded-3xl py-5 px-3 mt-6">
                 <div className="flex justify-between items-start">
-                    <p className="text-sm font-light text-white">Total Balance</p>
+                    <p className="text-sm font-light text-white">{t('home.total_balance')}</p>
                     <button
                         type="button"
                         onClick={() => navigate('/app/wallet')}
@@ -124,7 +125,7 @@ const Home = () => {
                                 onClick={() => navigate('/app/wallet')}
                                 className="text-xs text-white/80 underline text-left"
                             >
-                                Connect a wallet →
+                                {t('common.connect_wallet')}
                             </button>
                         )}
                     </div>
@@ -132,28 +133,28 @@ const Home = () => {
 
                 <div className="pt-4 flex items-center gap-1">
                     <img src="/trend-up.svg" className="w-5 h-5" alt="" />
-                    <p className="font-light text-sm text-white">Live backend sync</p>
+                    <p className="font-light text-sm text-white">{t('home.live_sync')}</p>
                 </div>
             </div>
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-4 pt-6">
                 <div className='py-5 shrink-0 w-[174px] px-4 rounded-[20px] bg-[#F5F7FB]'>
-                    <p className='text-sm'>NFTs Owned</p>
+                    <p className='text-sm'>{t('home.nfts_owned')}</p>
                     <div className='flex pt-2 items-center justify-between'>
                         <p className='font-semibold text-2xl'>{stats.nftsOwned}</p>
                         <img className='w-4 h-4' alt="" src="/layer.svg" />
                     </div>
                 </div>
                 <div className='py-5 shrink-0 w-[174px] px-4 rounded-[20px] bg-[#F5F7FB]'>
-                    <p className='text-sm'>Active Listings</p>
+                    <p className='text-sm'>{t('home.active_listings')}</p>
                     <div className='flex pt-2 items-center justify-between'>
                         <p className='font-semibold text-2xl'>{stats.activeListings}</p>
                         <img className='w-4 h-4' alt="" src="/tag.svg" />
                     </div>
                 </div>
                 <div className='py-5 shrink-0 w-[174px] px-4 rounded-[20px] bg-[#F5F7FB]'>
-                    <p className='text-sm'>Wallet Balance</p>
+                    <p className='text-sm'>{t('home.wallet_balance')}</p>
                     <div className='flex pt-2 items-center justify-between'>
                         {/* {walletConnected ? (
                             <p className='font-semibold text-lg'>
@@ -167,7 +168,7 @@ const Home = () => {
                     </div>
                 </div>
                 <div className='py-5 shrink-0 w-[174px] px-4 rounded-[20px] bg-[#F5F7FB]'>
-                    <p className='text-sm'>Stars</p>
+                    <p className='text-sm'>{t('home.stars')}</p>
                     <div className='flex pt-2 items-center justify-between'>
                         <p className='font-semibold text-2xl'>{stats.stars}</p>
                         <img className='w-4 h-4' alt="" src="/star.svg" />
@@ -180,9 +181,9 @@ const Home = () => {
                 <div className="mt-6 rounded-3xl bg-[#F5F7FB] px-4 py-4 border border-[#0E06361A]">
                     <div className="flex justify-between items-start gap-2 flex-wrap">
                         <div>
-                            <p className="font-semibold text-[#0E0636] text-sm">Your Telegram gifts</p>
+                            <p className="font-semibold text-[#0E0636] text-sm">{t('home.your_gifts')}</p>
                             <p className="text-[10px] text-[#666F8B] pt-1">
-                                Sell regular gifts → they appear under Market → Gifts
+                                {t('home.gifts_subtitle')}
                             </p>
                         </div>
                         <div className="flex gap-3 shrink-0 items-center">
@@ -191,14 +192,14 @@ const Home = () => {
                                 onClick={() => navigate('/app/gifts?sell=1')}
                                 className="text-xs font-semibold text-[#0E0636] bg-transparent border-0 p-0 cursor-pointer underline decoration-[#0E0636]/25"
                             >
-                                Sell gifts
+                                {t('home.sell_gifts')}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => navigate('/app/gifts')}
                                 className="text-xs font-semibold text-[#6B6AFD] bg-transparent border-0 p-0 cursor-pointer"
                             >
-                                View all
+                                {t('home.view_all')}
                             </button>
                         </div>
                     </div>
@@ -285,7 +286,7 @@ const Home = () => {
 
             {/* Collection — only this user's assets; preview max 2 */}
             <div className="pt-[49px] flex justify-between pb-6 px-3 items-center">
-                <p className="font-semibold text-xl text-[#0E0636]">Your Collection</p>
+                <p className="font-semibold text-xl text-[#0E0636]">{t('home.my_collection')}</p>
                 {collection.length > 2 ? (
                     <button
                         type="button"
@@ -320,7 +321,7 @@ const Home = () => {
                     <img src="/nocollection.svg" className='w-12 h-12' alt="" />
                     <div className='text-center'>
                         <p className='font-semibold text-[#666F8B] text-xs'>No Collections Yet</p>
-                        <p className="text-[10px] w-[239px] text-[#666F8B] pt-2">You haven’t created any collections so far. Start organizing your items by creating your first
+                        <p className="text-[10px] w-[239px] text-[#666F8B] pt-2">You haven't created any collections so far. Start organizing your items by creating your first
                             collection now.</p>
                     </div>
                     <button className='rounded-lg border border-[#666F8B33] w-[214px] font-medium text-xs h-10 text-[#666F8B]'>Create Your First Collection</button>
@@ -329,7 +330,7 @@ const Home = () => {
 
             {/* Recent Activity */}
             <div className="px-3 pt-12">
-                <p className="font-semibold text-xl pb-6 text-[#0E0636]">Recent Activity</p>
+                <p className="font-semibold text-xl pb-6 text-[#0E0636]">{t('home.recent_activity')}</p>
                 <div className="pt-6 bg-[#F5F7FB] rounded-3xl space-y-2 py-4 px-3">
                     {isLoading ? (
                         <p className="text-sm text-[#666F8B] text-center py-4">Loading activity...</p>
@@ -340,7 +341,7 @@ const Home = () => {
                             <img src="/transaction.svg" className='w-12 h-12' alt="" />
                             <div className='text-center'>
                                 <p className='font-semibold text-[#666F8B] text-xs'>No Recent Activity</p>
-                                <p className="text-[10px] w-[239px] text-[#666F8B] pt-2">Looks like there’s nothing here yet. Your transactions and activity will appear once you get started.</p>
+                                <p className="text-[10px] w-[239px] text-[#666F8B] pt-2">Looks like there's nothing here yet. Your transactions and activity will appear once you get started.</p>
                             </div>
                             <button className='rounded-lg border border-[#666F8B33] w-[214px] font-medium text-xs h-10 text-[#666F8B]'>Make Your First Transaction</button>
                         </div>

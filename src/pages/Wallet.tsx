@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useQueryClient } from '@tanstack/react-query'
@@ -18,6 +18,7 @@ import {
 } from '../utils/tonCollection'
 import { useTelegram } from '../contexts/TelegramContext'
 import { userClient } from '../services/user'
+import { useLanguage } from '../contexts/LanguageContext'
 
 type WalletTab = 'TON' | 'EVM'
 type TxStatus = 'idle' | 'loading' | 'success' | 'error'
@@ -65,6 +66,7 @@ function starsTopUpPlatformHint(platform?: string): string | null {
 const Wallet = () => {
     const navigate = useNavigate()
     const queryClient = useQueryClient()
+    const { t } = useLanguage()
     const { user: tgUser, webApp, isInTelegram, reportAccessBlock } = useTelegram()
     const starsCheckoutHint = starsTopUpPlatformHint(webApp?.platform)
     const [activeTab, setActiveTab] = useState<WalletTab>('TON')
@@ -326,8 +328,8 @@ const Wallet = () => {
                 <div className="mb-3 flex items-center gap-3 bg-green-900/40 border border-green-500/40 rounded-2xl px-4 py-3">
                     <span className="text-xl">✅</span>
                     <div>
-                        <p className="text-green-400 font-semibold text-sm">Transaction Sent!</p>
-                        <p className="text-green-300/70 text-xs">Balance is updating from the blockchain...</p>
+                        <p className="text-green-400 font-semibold text-sm">{t('wallet.tx_sent_banner')}</p>
+                        <p className="text-green-300/70 text-xs">{t('wallet.tx_sent_sub')}</p>
                     </div>
                 </div>
             )}
@@ -343,7 +345,7 @@ const Wallet = () => {
                             : 'bg-[#6B6AFD0D] text-[#6B6AFD]'
                             }`}
                     >
-                        {tab === 'TON' ? '💎 TON Wallet' : '🌈 EVM Wallet'}
+                        {tab === 'TON' ? `💎 TON ${t('wallet.title')}` : `🌈 EVM ${t('wallet.title')}`}
                     </button>
                 ))}
             </div>
@@ -367,10 +369,10 @@ const Wallet = () => {
                                 </button>
                             </div>
 
-                            <p className="text-sm text-white pt-6">Total Balance</p>
+                            <p className="text-sm text-white pt-6">{t('wallet.total_balance')}</p>
                             <p className="text-[32px] text-white pt-1 font-medium">
                                 {tonBalanceLoading ? (
-                                    <span className="text-2xl opacity-70">Loading...</span>
+                                    <span className="text-2xl opacity-70">{t('wallet.loading')}</span>
                                 ) : tonBalance !== null ? (
                                     `${tonBalance} TON`
                                 ) : '— TON'}
@@ -391,9 +393,9 @@ const Wallet = () => {
                             </div>
 
                             <div className="flex gap-[9px] pt-8">
-                                <button onClick={() => setDepositModalOpen(true)} className="flex-1 bg-black text-white rounded-full h-10 text-sm font-semibold">Deposit</button>
-                                <button onClick={() => { resetWithdraw(); setWithdrawModalOpen(true) }} className="flex-1 rounded-full h-10 text-sm font-semibold bg-white text-[#0E063699]">Withdraw</button>
-                                <button onClick={() => navigate('/swap')} className="flex-1 rounded-full h-10 text-sm font-semibold bg-white text-[#0E063699]">Swap</button>
+                                <button onClick={() => setDepositModalOpen(true)} className="flex-1 bg-black text-white rounded-full h-10 text-sm font-semibold">{t('wallet.deposit')}</button>
+                                <button onClick={() => { resetWithdraw(); setWithdrawModalOpen(true) }} className="flex-1 rounded-full h-10 text-sm font-semibold bg-white text-[#0E063699]">{t('wallet.withdraw')}</button>
+                                <button onClick={() => navigate('/swap')} className="flex-1 rounded-full h-10 text-sm font-semibold bg-white text-[#0E063699]">{t('wallet.swap')}</button>
                             </div>
                         </div>
                     ) : (
@@ -401,10 +403,10 @@ const Wallet = () => {
                             <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-4">
                                 <img src="/ton.jpg" className="w-10 h-10 rounded-xl" alt="" />
                             </div>
-                            <p className="text-white font-semibold text-lg mb-1">Connect TON Wallet</p>
-                            <p className="text-white/70 text-sm mb-6">Tonkeeper, MyTonWallet, Telegram Wallet & more</p>
+                            <p className="text-white font-semibold text-lg mb-1">{t('wallet.connect_ton')}</p>
+                            <p className="text-white/70 text-sm mb-6">{t('wallet.ton_subtitle')}</p>
                             <button onClick={() => tonConnectUI.openModal()} className="bg-white text-[#6B6AFD] font-semibold text-sm rounded-xl px-8 py-3 w-full">
-                                Connect TON Wallet
+                                {t('wallet.connect_ton')}
                             </button>
                         </div>
                     )}
@@ -412,14 +414,14 @@ const Wallet = () => {
                     {/* TON Recent Activity — real data from tonapi */}
                     <div className="px-3 pt-10">
                         <div className="flex items-center justify-between mb-4">
-                            <p className="font-semibold text-xl text-[#0E0636]">Recent Activity</p>
+                            <p className="font-semibold text-xl text-[#0E0636]">{t('wallet.recent_activity')}</p>
                             {tonConnected && (
                                 <button
                                     onClick={() => { fetchTonBalance(); fetchTonEvents() }}
                                     className="text-xs text-[#6B6AFD] flex items-center gap-1"
                                 >
                                     <img src="/refresh-2.svg" className="w-3.5 h-3.5" alt="" />
-                                    Refresh
+                                    {t('wallet.refresh')}
                                 </button>
                             )}
                         </div>
@@ -428,10 +430,9 @@ const Wallet = () => {
                                 <div className='bg-[#F5F7FB]  gap-3 flex flex-col items-center rounded-[20px] py-6'>
                                     <img src="/transaction.svg" className='w-12 h-12' alt="" />
                                     <div className='text-center'>
-                                        <p className='font-semibold text-[#666F8B] text-xs'>No Recent Activity</p>
-                                        <p className="text-[10px] w-[239px] text-[#666F8B] pt-2">Looks like there’s nothing here yet. Your transactions and activity will appear once you get started.</p>
+                                        <p className='font-semibold text-[#666F8B] text-xs'>{t('wallet.no_activity')}</p>
                                     </div>
-                                    <button className='rounded-lg border border-[#666F8B33] w-[214px] font-medium text-xs h-10 text-[#666F8B]'>Make Your First Transaction</button>
+                                    <button className='rounded-lg border border-[#666F8B33] w-[214px] font-medium text-xs h-10 text-[#666F8B]'>{t('wallet.make_first_tx')}</button>
                                 </div>
                             ) : eventsLoading ? (
                                 <div className="flex justify-center py-8">
@@ -439,14 +440,9 @@ const Wallet = () => {
                                 </div>
                             ) : tonEvents.length === 0 ? (
                                 <div className="text-center py-8">
-                                    <p className="text-[#666F8B] text-sm">No transactions yet</p>
-                                    <a
-                                        href={`${TON_EXPLORER}/address/${tonAddress}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-[#6B6AFD] text-xs mt-1 block"
-                                    >
-                                        View on Explorer ↗
+                                    <p className="text-[#666F8B] text-sm">{t('wallet.no_transactions')}</p>
+                                    <a href={`${TON_EXPLORER}/address/${tonAddress}`} target="_blank" rel="noreferrer" className="text-[#6B6AFD] text-xs mt-1 block">
+                                        {t('wallet.view_explorer')}
                                     </a>
                                 </div>
                             ) : (
@@ -532,29 +528,29 @@ const Wallet = () => {
                                     rel="noreferrer"
                                     className="block text-center text-[#6B6AFD] text-xs pt-2"
                                 >
-                                    View all on Explorer ↗
+                                    {t('wallet.view_all_explorer')}
                                 </a>
                             )}
                         </div>
                     </div>
 
                     {/* TON Quick Actions */}
-                    <p className="font-semibold pl-3 text-xl pt-12 pb-6 text-[#0E0636]">Quick Actions</p>
+                    <p className="font-semibold pl-3 text-xl pt-12 pb-6 text-[#0E0636]">{t('wallet.quick_actions')}</p>
                     <div className="flex gap-3.5 px-3">
                         <button onClick={() => navigate('/swap')} className="bg-[#6B6AFD0D] flex-1 rounded-[20px] flex flex-col items-center py-[21px]">
                             <img className="w-6 h-6" src="/refresh-circle.svg" alt="" />
-                            <p className="text-xs pt-[9px] font-medium text-[#6B6AFD] text-center">Swap Stars</p>
+                            <p className="text-xs pt-[9px] font-medium text-[#6B6AFD] text-center">{t('wallet.swap_stars')}</p>
                         </button>
                         <button onClick={() => tonConnectUI.openModal()} className="bg-[#6B6AFD0D] flex-1 rounded-[20px] flex flex-col items-center py-[21px]">
                             <img className="w-6 h-6" src="/wallet-add.svg" alt="" />
                             <p className="text-xs pt-[9px] font-medium text-center text-[#6B6AFD]">
-                                {tonConnected ? 'Switch Wallet' : 'Connect TON'}
+                                {tonConnected ? t('wallet.switch_wallet') : 'Connect TON'}
                             </p>
                         </button>
                         {tonConnected && (
                             <button onClick={() => tonConnectUI.disconnect()} className="bg-[#DA09091A] flex-1 rounded-[20px] flex flex-col items-center py-[21px]">
                                 <img className="w-6 h-6" src="/frame.svg" alt="" />
-                                <p className="text-xs pt-[9px] font-medium text-[#DA0909] text-center">Disconnect</p>
+                                <p className="text-xs pt-[9px] font-medium text-[#DA0909] text-center">{t('common.disconnect')}</p>
                             </button>
                         )}
                     </div>
@@ -577,7 +573,7 @@ const Wallet = () => {
                                 </button>
                             </div>
 
-                            <p className="text-sm text-white pt-6">Total Balance</p>
+                            <p className="text-sm text-white pt-6">{t('wallet.total_balance')}</p>
                             <p className="text-[32px] text-white pt-1 font-medium">
                                 {evmBalance
                                     ? `${parseFloat(evmBalance.formatted).toFixed(4)} ${evmBalance.symbol}`
@@ -592,9 +588,9 @@ const Wallet = () => {
                             </div>
 
                             <div className="flex gap-[9px] pt-8">
-                                <button onClick={() => setDepositModalOpen(true)} className="flex-1 bg-black text-white rounded-full h-10 text-sm font-semibold">Deposit</button>
-                                <button onClick={() => { resetWithdraw(); setWithdrawModalOpen(true) }} className="flex-1 rounded-full h-10 text-sm font-semibold bg-white text-[#0E063699]">Withdraw</button>
-                                <button onClick={() => navigate('/swap')} className="flex-1 rounded-full h-10 text-sm font-semibold bg-white text-[#0E063699]">Swap</button>
+                                <button onClick={() => setDepositModalOpen(true)} className="flex-1 bg-black text-white rounded-full h-10 text-sm font-semibold">{t('wallet.deposit')}</button>
+                                <button onClick={() => { resetWithdraw(); setWithdrawModalOpen(true) }} className="flex-1 rounded-full h-10 text-sm font-semibold bg-white text-[#0E063699]">{t('wallet.withdraw')}</button>
+                                <button onClick={() => navigate('/swap')} className="flex-1 rounded-full h-10 text-sm font-semibold bg-white text-[#0E063699]">{t('wallet.swap')}</button>
                             </div>
                         </div>
                     ) : (
@@ -602,12 +598,12 @@ const Wallet = () => {
                             <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-4">
                                 <img src="/eth.png" className="w-10 h-10 rounded-xl" alt="" />
                             </div>
-                            <p className="text-white font-semibold text-lg mb-1">Connect EVM Wallet</p>
-                            <p className="text-white/70 text-sm mb-6">MetaMask, Coinbase, WalletConnect & more</p>
+                            <p className="text-white font-semibold text-lg mb-1">{t('wallet.connect_evm')}</p>
+                            <p className="text-white/70 text-sm mb-6">{t('wallet.evm_subtitle')}</p>
                             <ConnectButton.Custom>
                                 {({ openConnectModal }) => (
                                     <button onClick={openConnectModal} className="bg-white text-[#6B6AFD] font-semibold text-sm rounded-xl px-8 py-3 w-full">
-                                        Connect EVM Wallet
+                                        {t('wallet.connect_evm')}
                                     </button>
                                 )}
                             </ConnectButton.Custom>
@@ -625,27 +621,27 @@ const Wallet = () => {
                                             <img className="w-4 h-4" src="/import.svg" alt="" />
                                         </div>
                                         <div>
-                                            <p className="font-medium text-xs text-[#0E0636]">Wallet Connected</p>
+                                            <p className="font-medium text-xs text-[#0E0636]">{t('wallet.wallet_connected')}</p>
                                             <p className="text-[10px] font-light text-[#0E0636]">Just now</p>
                                         </div>
                                     </div>
                                     <div className="w-2 h-2 rounded-full bg-green-400 mr-1" />
                                 </div>
                             ) : (
-                                <p className="text-[#666F8B] text-sm text-center py-8">Connect your EVM wallet to see activity</p>
+                                <p className="text-[#666F8B] text-sm text-center py-8">{t('wallet.evm_activity_hint')}</p>
                             )}
                         </div>
                     </div>
 
                     {/* EVM Quick Actions */}
-                    <p className="font-semibold pl-3 text-xl pt-12 pb-6 text-[#0E0636]">Quick Actions</p>
+                    <p className="font-semibold pl-3 text-xl pt-12 pb-6 text-[#0E0636]">{t('wallet.quick_actions')}</p>
                     <div className="flex gap-3.5 px-3">
                         <ConnectButton.Custom>
                             {({ openChainModal, openConnectModal }) => (
                                 <button onClick={evmConnected ? openChainModal : openConnectModal} className="bg-[#6B6AFD0D] flex-1 rounded-[20px] flex flex-col items-center py-[21px]">
                                     <img className="w-6 h-6" src="/refresh-circle.svg" alt="" />
                                     <p className="text-xs pt-[9px] font-medium text-[#6B6AFD] text-center">
-                                        {evmConnected ? 'Switch Network' : 'Connect Wallet'}
+                                        {evmConnected ? t('wallet.switch_network') : t('wallet.connect_wallet_short')}
                                     </p>
                                 </button>
                             )}
@@ -653,7 +649,7 @@ const Wallet = () => {
                         {evmConnected && (
                             <button onClick={() => evmDisconnect()} className="bg-[#DA09091A] flex-1 rounded-[20px] flex flex-col items-center py-[21px]">
                                 <img className="w-6 h-6" src="/frame.svg" alt="" />
-                                <p className="text-xs pt-[9px] font-medium text-[#DA0909] text-center">Disconnect</p>
+                                <p className="text-xs pt-[9px] font-medium text-[#DA0909] text-center">{t('common.disconnect')}</p>
                             </button>
                         )}
                     </div>
@@ -668,9 +664,9 @@ const Wallet = () => {
                 isOpen={depositModalOpen}
                 onClose={() => setDepositModalOpen(false)}
             >
-                <h2 className="text-center font-semibold text-xl text-[#0E0636]">Deposit</h2>
+                <h2 className="text-center font-semibold text-xl text-[#0E0636]">{t('wallet.deposit_title')}</h2>
                 <p className="pt-3 text-[#666F8B] mx-auto text-center text-sm max-w-[280px]">
-                    Scan or copy your {activeTab} address to receive funds.
+                    {t('wallet.deposit_scan')} {activeTab} {t('wallet.deposit_receive')}
                 </p>
 
                 {/* Real QR Code via free API */}
@@ -682,7 +678,7 @@ const Wallet = () => {
                             alt="Wallet QR Code"
                         />
                     ) : (
-                        <p className="text-[#666F8B] text-xs text-center">Connect wallet first</p>
+                        <p className="text-[#666F8B] text-xs text-center">{t('wallet.connect_first')}</p>
                     )}
                 </div>
 
@@ -695,7 +691,7 @@ const Wallet = () => {
                             onClick={() => { copyToClipboard(activeAddress) }}
                             className="bg-[#6B6AFD] text-white text-sm rounded-xl h-[45px] flex items-center justify-center gap-2 font-semibold"
                         >
-                            Copy Address
+                            {t('wallet.copy_address')}
                             <img src="/copy.svg" className="w-4 h-4 brightness-0 invert" alt="" />
                         </button>
                     </div>
@@ -710,12 +706,12 @@ const Wallet = () => {
                 isOpen={withdrawModalOpen}
                 onClose={() => setWithdrawModalOpen(false)}
             >
-                <h2 className="text-center font-semibold text-xl text-[#0E0636]">Withdraw</h2>
+                <h2 className="text-center font-semibold text-xl text-[#0E0636]">{t('wallet.withdraw_title')}</h2>
                 <p className="pt-3 pb-6 text-[#666F8B] mx-auto text-center text-sm">
                     Send {activeTab === 'TON' ? 'TON' : evmBalance?.symbol ?? 'ETH'} to any wallet address.
                 </p>
 
-                <label className="text-sm font-medium text-[#0E0636]">Recipient Address</label>
+                <label className="text-sm font-medium text-[#0E0636]">{t('wallet.recipient')}</label>
                 <div className={`bg-[#6B6AFD0D] mt-2 mb-5 flex items-center rounded-xl gap-2 border pl-4 h-[52px] ${withdrawAddress ? 'border-[#6B6AFD]' : 'border-[#666F8B33]'}`}>
                     <img className="w-5 h-5" src="/wallet-2.svg" alt="" />
                     <input
@@ -727,7 +723,7 @@ const Wallet = () => {
                     />
                 </div>
 
-                <label className="text-sm font-medium text-[#0E0636]">Amount</label>
+                <label className="text-sm font-medium text-[#0E0636]">{t('wallet.amount')}</label>
                 <div className={`mt-2 mb-2 flex items-center rounded-xl gap-2 border pl-4 h-[52px] ${withdrawAmount ? 'border-[#6B6AFD]' : 'border-[#666F8B33]'}`}>
                     {activeTab === 'TON' ? (
                         <img className="w-5 h-5 rounded" src="/ton.jpg" alt="" />
@@ -755,12 +751,12 @@ const Wallet = () => {
                 </div>
 
                 <p className="text-xs text-[#666F8B] mb-1">
-                    Available: {activeTab === 'TON'
+                    {t('wallet.available')} {activeTab === 'TON'
                         ? `${tonBalance ?? '0'} TON`
                         : evmBalance ? `${parseFloat(evmBalance.formatted).toFixed(4)} ${evmBalance.symbol}` : '0'}
                 </p>
                 <p className="text-xs text-[#666F8B]">
-                    Gas Fee: ~{activeTab === 'TON' ? '0.005 TON' : '0.0005 ETH'}
+                    {t('wallet.gas_fee')} ~{activeTab === 'TON' ? '0.005 TON' : '0.0005 ETH'}
                 </p>
 
                 {withdrawError && (
@@ -777,9 +773,9 @@ const Wallet = () => {
                     {withdrawStatus === 'loading' || evmSending ? (
                         <>
                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Sending...
+                            {t('wallet.sending')}
                         </>
-                    ) : 'Review & Send'}
+                    ) : t('wallet.review_send')}
                 </button>
             </Modal>
 
@@ -791,12 +787,12 @@ const Wallet = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                     </div>
-                    <p className="text-xl font-semibold text-[#0E0636]">Transaction Sent!</p>
-                    <p className="text-sm text-[#666F8B] pt-2 pb-4">Your transaction has been broadcast to the network.</p>
+                    <p className="text-xl font-semibold text-[#0E0636]">{t('wallet.tx_success_title')}</p>
+                    <p className="text-sm text-[#666F8B] pt-2 pb-4">{t('wallet.tx_broadcast')}</p>
 
                     {withdrawTxHash && (
                         <div className="bg-[#F5F7FB] rounded-xl px-4 py-3 mb-4">
-                            <p className="text-[10px] text-[#666F8B] mb-1">Transaction Reference</p>
+                            <p className="text-[10px] text-[#666F8B] mb-1">{t('wallet.tx_reference')}</p>
                             <p className="text-xs font-mono text-[#0E0636] break-all">{withdrawTxHash.slice(0, 40)}...</p>
                         </div>
                     )}
@@ -809,20 +805,20 @@ const Wallet = () => {
                         rel="noopener noreferrer"
                         className="block w-full h-11 border border-[#6B6AFD] text-[#6B6AFD] text-sm font-semibold rounded-xl flex items-center justify-center mb-3"
                     >
-                        View on Explorer ↗
+                        {t('wallet.view_explorer')}
                     </a>
                     <button
                         onClick={() => setTxResultModal(false)}
                         className="w-full h-11 bg-[#6B6AFD] text-white rounded-xl text-sm font-semibold"
                     >
-                        Done
+                        {t('wallet.done')}
                     </button>
                 </div>
             </Modal>
 
             {/* ═══════════ STARS MODAL ═══════════ */}
             <Modal onClose={() => setStarsModalOpen(false)} isOpen={starsModalOpen}>
-                <p className="text-center text-sm text-[#666F8B]">Your Stars Balance</p>
+                <p className="text-center text-sm text-[#666F8B]">{t('wallet.stars_balance')}</p>
                 <div className="flex justify-center pt-2 items-center gap-2">
                     <p className="text-[40px] font-semibold text-[#0E0636]">{starsBalanceLabel}</p>
                     <img className="w-7 h-7" src="/stardark.svg" alt="" />
@@ -834,7 +830,7 @@ const Wallet = () => {
                     <p className="mt-2 text-[11px] text-[#666F8B] text-center leading-snug">{starsCheckoutHint}</p>
                 ) : null}
                 <div className="mt-5">
-                    <label className="block text-xs text-[#666F8B] mb-1">Top up amount (Stars)</label>
+                    <label className="block text-xs text-[#666F8B] mb-1">{t('wallet.topup_amount')}</label>
                     <input
                         type="number"
                         min={1}
@@ -851,7 +847,7 @@ const Wallet = () => {
                     )}
                 </div>
                 <div className="pt-6 flex gap-3">
-                    <button onClick={() => setStarsModalOpen(false)} className="flex-1 h-11 rounded-xl text-[#6B6AFD] font-semibold text-sm border border-[#6B6AFD]">Close</button>
+                    <button onClick={() => setStarsModalOpen(false)} className="flex-1 h-11 rounded-xl text-[#6B6AFD] font-semibold text-sm border border-[#6B6AFD]">{t('wallet.close')}</button>
                     <button
                         type="button"
                         onClick={async () => {
@@ -900,7 +896,7 @@ const Wallet = () => {
                         }}
                         className="flex-1 h-11 bg-[#6B6AFD] text-white rounded-xl text-sm font-semibold"
                     >
-                        Top Up Stars
+                        {t('wallet.topup_btn')}
                     </button>
                 </div>
             </Modal>

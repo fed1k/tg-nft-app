@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTonAddress, useTonWallet } from '@tonconnect/ui-react'
 import { useAccount } from 'wagmi'
@@ -6,14 +6,25 @@ import NftCard from '../components/NftCard'
 import GiftListingCard from '../components/GiftListingCard'
 import { useTelegram } from '../contexts/TelegramContext'
 import { userClient } from '../services/user'
-
-const CATEGORIES = ["All Item's", '3D Art', 'Collectibles', 'Gaming']
+import { useLanguage } from '../contexts/LanguageContext'
 
 const NFT_MARKET_TABS = ['Explore', 'StarGifts', "My Listing's"] as const
 
 const Market = () => {
     const queryClient = useQueryClient()
+    const { t, lang } = useLanguage()
     const { user, initData, isInTelegram, webApp } = useTelegram()
+
+    // API values must stay in English; only the display label is translated.
+    const CATEGORIES = ["All Item's", '3D Art', 'Collectibles', 'Gaming'] as const
+    const categoryLabel = (cat: string) => {
+        if (cat === "All Item's") return t('market.all_categories')
+        if (lang === 'ru') {
+            if (cat === 'Collectibles') return 'Коллекционные'
+            if (cat === 'Gaming') return 'Игровые'
+        }
+        return cat
+    }
     const tonAddress = useTonAddress()
     const tonRawAddress = useTonAddress(false)
     const tonWallet = useTonWallet()
@@ -120,11 +131,7 @@ const Market = () => {
                     type="text"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    placeholder={
-                        isGiftsTab
-                            ? 'Search gifts by name, seller, or gift id'
-                            : 'Search Items for buying, StarGifts'
-                    }
+                    placeholder={isGiftsTab ? t('market.search_gifts') : t('market.search_nft')}
                 />
                 {searchQuery && (
                     <button
@@ -138,22 +145,29 @@ const Market = () => {
 
             {/* Tabs */}
             <div className="pt-6 flex pl-3 border-b border-[#666F8B33] overflow-x-auto">
-                {(['Explore', 'StarGifts', 'Gifts', "My Listing's"] as const).map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => {
-                            setActiveTab(tab)
-                            setActiveCategory("All Item's")
-                        }}
-                        className={`text-sm border-b-2 cursor-pointer font-medium pb-2 px-3 -mb-px transition-colors shrink-0 ${
-                            activeTab === tab
-                                ? 'border-[#0E0636] text-[#0E0636]'
-                                : 'border-transparent text-[#666F8B]'
-                        }`}
-                    >
-                        {tab}
-                    </button>
-                ))}
+                {(['Explore', 'StarGifts', 'Gifts', "My Listing's"] as const).map(tab => {
+                    const tabLabel =
+                        tab === 'Explore' ? t('market.explore') :
+                        tab === 'StarGifts' ? t('market.star_gifts') :
+                        tab === 'Gifts' ? t('market.gifts_tab') :
+                        t('market.my_listings')
+                    return (
+                        <button
+                            key={tab}
+                            onClick={() => {
+                                setActiveTab(tab)
+                                setActiveCategory("All Item's")
+                            }}
+                            className={`text-sm border-b-2 cursor-pointer font-medium pb-2 px-3 -mb-px transition-colors shrink-0 ${
+                                activeTab === tab
+                                    ? 'border-[#0E0636] text-[#0E0636]'
+                                    : 'border-transparent text-[#666F8B]'
+                            }`}
+                        >
+                            {tabLabel}
+                        </button>
+                    )
+                })}
             </div>
 
             {/* Category Chips (NFT tabs only) */}
@@ -169,14 +183,13 @@ const Market = () => {
                                     : 'bg-[#F5F7FB] text-[#666F8B]'
                             }`}
                         >
-                            {cat}
+                            {categoryLabel(cat)}
                         </button>
                     ))}
                 </div>
             ) : (
                 <p className="text-[11px] text-[#666F8B] px-3 pt-4 pb-2 leading-relaxed">
-                    List gifts in Stars or TON (seller wallet required for TON). Checkout mirrors NFT buys: crypto split to
-                    seller + platform fee, then Telegram delivers this gift type to the buyer&apos;s profile.
+                    {t('market.gifts_desc')}
                 </p>
             )}
 
@@ -184,14 +197,11 @@ const Market = () => {
             {isGiftsTab ? (
                 giftsLoading ? (
                     <div className="text-center py-16">
-                        <p className="text-[#666F8B] text-sm">Loading gift listings...</p>
+                        <p className="text-[#666F8B] text-sm">{t('market.loading_gifts')}</p>
                     </div>
                 ) : giftsError ? (
                     <div className="text-center py-16">
-                        <p className="text-[#DA0909] text-sm">Failed to load gift marketplace.</p>
-                        <p className="text-[#666F8B] text-xs mt-2">
-                            Check `VITE_USER_API_URL`, backend status, and CORS origin.
-                        </p>
+                        <p className="text-[#DA0909] text-sm">{t('market.error_gifts')}</p>
                     </div>
                 ) : giftListings.length > 0 ? (
                     <div className="grid grid-cols-2 gap-x-3.5 gap-y-6 px-3 sm:grid-flow-col">
@@ -224,31 +234,22 @@ const Market = () => {
                     </div>
                 ) : (
                     <div className="text-center py-16">
-                        <p className="text-[#666F8B] text-sm">No gift listings yet.</p>
-                        <p className="text-[#666F8B] text-xs mt-2 px-4">
-                            Connect Wallet and choose TON pricing on Telegram Gifts → Sell, then others can pay you in TON here.
-                        </p>
+                        <p className="text-[#666F8B] text-sm">{t('market.no_gifts')}</p>
+                        <p className="text-[#666F8B] text-xs mt-2 px-4">{t('market.no_gifts_hint')}</p>
                         {searchQuery ? (
-                            <button
-                                type="button"
-                                onClick={() => setSearchQuery('')}
-                                className="text-[#6B6AFD] text-xs mt-2 underline"
-                            >
-                                Clear search
+                            <button type="button" onClick={() => setSearchQuery('')} className="text-[#6B6AFD] text-xs mt-2 underline">
+                                {t('market.clear_search')}
                             </button>
                         ) : null}
                     </div>
                 )
             ) : isLoading ? (
                 <div className="text-center py-16">
-                    <p className="text-[#666F8B] text-sm">Loading marketplace...</p>
+                    <p className="text-[#666F8B] text-sm">{t('market.loading')}</p>
                 </div>
             ) : isError ? (
                 <div className="text-center py-16">
-                    <p className="text-[#DA0909] text-sm">Failed to load marketplace data.</p>
-                    <p className="text-[#666F8B] text-xs mt-2">
-                        Check `VITE_ADMIN_API_URL`/`VITE_USER_API_URL`, backend status, and CORS origin.
-                    </p>
+                    <p className="text-[#DA0909] text-sm">{t('market.error')}</p>
                 </div>
             ) : filtered.length > 0 ? (
                 <div className="grid grid-cols-2 gap-x-3.5 gap-y-6 px-3">
@@ -265,13 +266,10 @@ const Market = () => {
                 </div>
             ) : (
                 <div className="text-center py-16">
-                    <p className="text-[#666F8B] text-sm">No data available in this section yet.</p>
+                    <p className="text-[#666F8B] text-sm">{t('market.no_data')}</p>
                     {searchQuery && (
-                        <button
-                            onClick={() => setSearchQuery('')}
-                            className="text-[#6B6AFD] text-xs mt-2 underline"
-                        >
-                            Clear search
+                        <button onClick={() => setSearchQuery('')} className="text-[#6B6AFD] text-xs mt-2 underline">
+                            {t('market.clear_search')}
                         </button>
                     )}
                 </div>

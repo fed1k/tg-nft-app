@@ -10,6 +10,7 @@ import { buildNftMintPayload, getNextItemIndex, TON_EXPLORER } from '../utils/to
 import { uploadImageToIPFS, uploadMetadataToIPFS, isPinataConfigured } from '../utils/pinata'
 import { getCollectionAddress, normalizeCollectionAddress, buildCollectionDeployTransaction, saveCollectionAddress, TON_EXPLORER_COLLECTION } from '../utils/tonCollection'
 import { userClient } from '../services/user'
+import { useLanguage } from '../contexts/LanguageContext'
 
 type TxStatus = 'idle' | 'loading' | 'success' | 'error'
 
@@ -19,13 +20,6 @@ const PENDING_TX_KEY = 'pendingTx'
 const PENDING_MINT_DRAFT_KEY = 'pendingMintDraft'
 
 type MintStep = { label: string; status: 'pending' | 'loading' | 'done' | 'error' }
-const INITIAL_STEPS: MintStep[] = [
-    { label: '📤 Uploading image to IPFS', status: 'pending' },
-    { label: '📝 Uploading metadata to IPFS', status: 'pending' },
-    { label: '🔗 Reading collection info', status: 'pending' },
-    { label: '✍️  Waiting for wallet approval', status: 'pending' },
-    { label: '💾 Saving minted NFT to database', status: 'pending' },
-]
 
 type PendingMint = {
     clientMintId: string
@@ -64,7 +58,16 @@ const LISTING_SYNC_MAX_MS = 120_000
 const Mint = () => {
     const navigate = useNavigate()
     const queryClient = useQueryClient()
+    const { t } = useLanguage()
     const { webApp, isInTelegram, user } = useTelegram()
+
+    const INITIAL_STEPS: MintStep[] = [
+        { label: t('mint.uploading_image'), status: 'pending' },
+        { label: t('mint.uploading_metadata'), status: 'pending' },
+        { label: t('mint.reading_collection'), status: 'pending' },
+        { label: t('mint.waiting_wallet'), status: 'pending' },
+        { label: t('mint.saving'), status: 'pending' },
+    ]
 
     // Wallets
     const [tonConnectUI] = useTonConnectUI()
@@ -607,10 +610,8 @@ const Mint = () => {
                         <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-4">
                             <span className="text-3xl">🎨</span>
                         </div>
-                        <p className="text-white font-semibold text-lg mb-1">Collection Required</p>
-                        <p className="text-white/75 text-sm">
-                            Deploy your NFT collection first — it only takes a few seconds.
-                        </p>
+                        <p className="text-white font-semibold text-lg mb-1">{t('mint.collection_required')}</p>
+                        <p className="text-white/75 text-sm">{t('mint.collection_subtitle')}</p>
                     </div>
 
                     {/* Steps card */}
@@ -636,7 +637,7 @@ const Mint = () => {
                             className="w-full bg-[#6B6AFD] text-white font-semibold text-sm rounded-2xl py-4 flex items-center justify-center gap-2"
                         >
                             <span>🚀</span>
-                            <span>Deploy Collection Now</span>
+                            <span>{t('mint.deploy_now')}</span>
                         </button>
                     </div>
                 </div>
@@ -660,7 +661,7 @@ const Mint = () => {
                                 <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
                                     <span className="text-xs text-white">✏️</span>
                                 </div>
-                                <p className="text-white text-xs font-medium">Tap to change image</p>
+                                <p className="text-white text-xs font-medium">{t('mint.change_image')}</p>
                             </div>
                         </div>
                     </div>
@@ -673,7 +674,7 @@ const Mint = () => {
                             </svg>
                         </div>
                         <div>
-                            <p className="text-[#6B6AFD] font-semibold text-sm">Tap to select image</p>
+                            <p className="text-[#6B6AFD] font-semibold text-sm">{t('mint.tap_image')}</p>
                             <p className="text-[#666F8B] text-[10px] text-center mt-1">PNG · JPG · GIF · WebP</p>
                         </div>
                     </div>
@@ -686,14 +687,14 @@ const Mint = () => {
                 {/* Name */}
                 <div>
                     <label className="text-sm font-semibold text-[#0E0636] block mb-1.5">
-                        NFT Name <span className="text-red-500">*</span>
+                        {t('mint.nft_name')} <span className="text-red-500">*</span>
                     </label>
                     <input
                         type="text"
                         value={name}
                         onChange={e => { setName(e.target.value); haptic('light') }}
                         maxLength={50}
-                        placeholder="e.g. Crystal Cube #001"
+                        placeholder={t('mint.nft_name_placeholder')}
                         className="w-full border border-[#666F8B33] rounded-xl px-4 py-3 text-sm text-[#0E0636] outline-none focus:border-[#6B6AFD] focus:bg-[#6B6AFD04] transition-colors placeholder:text-[#666F8B66]"
                     />
                 </div>
@@ -701,13 +702,13 @@ const Mint = () => {
                 {/* Description */}
                 <div>
                     <div className="flex justify-between mb-1.5">
-                        <label className="text-sm font-semibold text-[#0E0636]">Description</label>
+                        <label className="text-sm font-semibold text-[#0E0636]">{t('mint.description')}</label>
                         <span className="text-xs text-[#666F8B]">{description.length}/200</span>
                     </div>
                     <textarea
                         value={description}
                         onChange={e => setDescription(e.target.value.slice(0, 200))}
-                        placeholder="Describe your NFT..."
+                        placeholder={t('mint.description_placeholder')}
                         rows={3}
                         className="w-full border border-[#666F8B33] rounded-xl px-4 py-3 text-sm text-[#0E0636] outline-none focus:border-[#6B6AFD] focus:bg-[#6B6AFD04] transition-colors resize-none placeholder:text-[#666F8B66]"
                     />
@@ -716,7 +717,7 @@ const Mint = () => {
                 {/* Price */}
                 <div>
                     <label className="text-sm font-semibold text-[#0E0636] block mb-1.5">
-                        List Price (TON) <span className="text-red-500">*</span>
+                        {t('mint.price')} <span className="text-red-500">*</span>
                     </label>
                     <div className={`flex items-center border rounded-xl px-4 transition-colors ${price ? 'border-[#6B6AFD] bg-[#6B6AFD04]' : 'border-[#666F8B33]'}`}>
                         <img className="w-5 h-5 rounded shrink-0" src="/ton.jpg" alt="" />
@@ -739,7 +740,7 @@ const Mint = () => {
                         <>
                             <div className="w-2.5 h-2.5 rounded-full bg-green-400 shrink-0" />
                             <p className="text-xs text-[#6B6AFD] font-medium flex-1">{walletLabel}</p>
-                            <span className="text-[10px] text-green-500 font-semibold">Ready</span>
+                            <span className="text-[10px] text-green-500 font-semibold">{t('mint.wallet_ready')}</span>
                         </>
                     ) : (
                         <>
@@ -763,11 +764,11 @@ const Mint = () => {
                     disabled={!isFormValid}
                     className="mt-8 w-full h-[52px] bg-[#6B6AFD] text-white rounded-2xl text-sm font-bold disabled:opacity-40 hover:bg-[#5a59e0] transition-colors shadow-lg shadow-[#6B6AFD44]"
                 >
-                    {!walletConnected ? '🔗 Connect TON Wallet'
-                        : !imageFile ? '📷 Select Image to Continue'
-                            : !name ? '✏️ Enter NFT Name'
-                                : !price ? '💰 Enter Price'
-                                    : '🚀 Mint NFT on Testnet'}
+                    {!walletConnected ? `🔗 ${t('mint.connect_wallet')}`
+                        : !imageFile ? `📷 ${t('mint.select_image')}`
+                            : !name ? `✏️ ${t('mint.enter_name')}`
+                                : !price ? `💰 ${t('mint.enter_price')}`
+                                    : `🚀 ${t('mint.mint_button')}`}
                 </button>
             )}
 
@@ -789,7 +790,7 @@ const Mint = () => {
             {/* ═══ PROGRESS MODAL (browser fallback) ═══ */}
             <Modal isOpen={progressOpen} onClose={() => { if (!isMinting) { setProgressOpen(false); setMintError(''); setSteps(INITIAL_STEPS) } }}>
                 <p className="text-center text-xl font-semibold text-[#0E0636] pb-1">
-                    {isMinting ? 'Minting in Progress' : mintError ? 'Minting Failed' : 'Done!'}
+                    {isMinting ? t('mint.minting') : mintError ? t('mint.minting_failed') : t('mint.done')}
                 </p>
                 <p className="text-center text-xs text-[#666F8B] pb-5">TON Mainnet</p>
 
@@ -825,7 +826,7 @@ const Mint = () => {
                     <div className="flex gap-3">
                         <button onClick={() => { setSteps(INITIAL_STEPS); setMintError(''); setIsMinting(false) }}
                             className="flex-1 h-11 border border-[#6B6AFD] text-[#6B6AFD] text-sm rounded-xl">
-                            Try Again
+                            {t('mint.try_again')}
                         </button>
                         <button onClick={() => { setProgressOpen(false); setSteps(INITIAL_STEPS); setMintError(''); setIsMinting(false) }}
                             className="flex-1 h-11 bg-[#DA0909] text-white text-sm rounded-xl">
@@ -836,7 +837,7 @@ const Mint = () => {
 
                 {isMinting && !mintError && (
                     <p className="text-center text-xs text-[#666F8B]">
-                        Please approve in your wallet app...
+                        {t('mint.approve_wallet')}
                     </p>
                 )}
             </Modal>
@@ -847,9 +848,9 @@ const Mint = () => {
                     <div className="w-16 h-16 mx-auto rounded-full bg-[#6B6AFD] flex items-center justify-center mb-4">
                         <img className="w-9 h-9" src="/verify.svg" alt="" />
                     </div>
-                    <p className="text-xl font-bold text-[#0E0636]">NFT Minted! 🎉</p>
+                    <p className="text-xl font-bold text-[#0E0636]">{t('mint.success_title')}</p>
                     <p className="text-sm text-[#666F8B] mt-1 mb-4">
-                        <span className="font-semibold text-[#0E0636]">"{name}"</span> is live on TON Mainnet
+                        <span className="font-semibold text-[#0E0636]">"{name}"</span> {t('mint.success_live')}
                     </p>
 
                     {mintedImageUrl && (
@@ -875,11 +876,11 @@ const Mint = () => {
                     <div className="flex gap-3">
                         <button onClick={() => { setSuccessOpen(false); handleReset() }}
                             className="flex-1 h-11 border border-[#6B6AFD] text-[#6B6AFD] text-sm rounded-xl">
-                            Mint Another
+                            {t('mint.mint_another')}
                         </button>
                         <button onClick={() => { setSuccessOpen(false); handleReset(); navigate('/app/home') }}
                             className="flex-1 h-11 bg-[#6B6AFD] text-white text-sm font-bold rounded-xl">
-                            Go Home
+                            {t('mint.go_home')}
                         </button>
                     </div>
                 </div>
@@ -893,13 +894,13 @@ const Mint = () => {
                 isOpen={deployCollectionModal}
                 onClose={() => setDeployCollectionModal(false)}
             >
-                <h2 className="text-center font-semibold text-xl text-[#0E0636]">Deploy NFT Collection</h2>
+                <h2 className="text-center font-semibold text-xl text-[#0E0636]">{t('mint.deploy_collection')}</h2>
                 <p className="pt-2 pb-5 text-[#666F8B] text-center text-xs">
                     Your collection contract will be deployed on TON {import.meta.env?.VITE_TON_NETWORK === 'testnet' ? 'Testnet' : 'Mainnet'}.
                     Cost: ~0.05 TON
                 </p>
 
-                <label className="text-sm font-medium text-[#0E0636]">Collection Name *</label>
+                <label className="text-sm font-medium text-[#0E0636]">{t('mint.collection_name')} *</label>
                 <input
                     className="mt-2 mb-4 w-full h-[52px] border border-[#6B6AFD33] rounded-xl px-4 text-sm outline-none focus:border-[#6B6AFD] bg-[#6B6AFD0D]"
                     placeholder="e.g. My Awesome NFTs"
@@ -908,10 +909,10 @@ const Mint = () => {
                     maxLength={64}
                 />
 
-                <label className="text-sm font-medium text-[#0E0636]">Description</label>
+                <label className="text-sm font-medium text-[#0E0636]">{t('mint.description')}</label>
                 <textarea
                     className="mt-2 mb-4 w-full border border-[#6B6AFD33] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#6B6AFD] bg-[#6B6AFD0D] resize-none"
-                    placeholder="Describe your NFT collection..."
+                    placeholder={t('mint.description_placeholder')}
                     rows={3}
                     value={collectionDesc}
                     onChange={e => setCollectionDesc(e.target.value)}
@@ -920,7 +921,7 @@ const Mint = () => {
 
                 <div className="mb-5">
                     <div className="flex justify-between mb-2">
-                        <label className="text-sm font-medium text-[#0E0636]">Royalty</label>
+                        <label className="text-sm font-medium text-[#0E0636]">{t('mint.royalty')}</label>
                         <span className="text-sm font-semibold text-[#6B6AFD]">{collectionRoyalty}%</span>
                     </div>
                     <input
@@ -949,7 +950,7 @@ const Mint = () => {
                     {deployStatus === 'loading' ? (
                         <>
                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Deploying...
+                            {t('mint.deploying')}
                         </>
                     ) : '🚀 Deploy Collection'}
                 </button>
@@ -959,12 +960,10 @@ const Mint = () => {
             <Modal isOpen={deploySuccessModal} onClose={() => setDeploySuccessModal(false)}>
                 <div className="text-center py-2">
                     <div className="text-5xl mb-4">🎉</div>
-                    <p className="text-xl font-semibold text-[#0E0636]">Collection Deployed!</p>
-                    <p className="text-sm text-[#666F8B] pt-2 pb-4">
-                        Your NFT collection is live on TON blockchain. You can now mint NFTs into it.
-                    </p>
+                    <p className="text-xl font-semibold text-[#0E0636]">{t('mint.collection_deployed')}</p>
+                    <p className="text-sm text-[#666F8B] pt-2 pb-4">{t('mint.collection_live')}</p>
                     <div className="bg-[#F5F7FB] rounded-xl px-4 py-3 mb-4 text-left">
-                        <p className="text-[10px] text-[#666F8B] mb-1">Collection Address</p>
+                        <p className="text-[10px] text-[#666F8B] mb-1">{t('mint.collection_address')}</p>
                         <p className="font-mono text-xs text-[#0E0636] break-all">{deployedAddress}</p>
                     </div>
                     <div className="flex gap-2 mb-3">
@@ -974,7 +973,7 @@ const Mint = () => {
                             rel="noopener noreferrer"
                             className="flex-1 h-11 border border-[#6B6AFD] text-[#6B6AFD] text-sm font-semibold rounded-xl flex items-center justify-center"
                         >
-                            View on Explorer ↗
+                            {t('mint.view_explorer')}
                         </a>
                         <button
                             onClick={() => {
@@ -986,14 +985,14 @@ const Mint = () => {
                             }}
                             className="flex-1 h-11 bg-[#6B6AFD0D] text-[#6B6AFD] text-sm font-semibold rounded-xl"
                         >
-                            Copy Address
+                            {t('mint.copy_address')}
                         </button>
                     </div>
                     <button
                         onClick={() => { setDeploySuccessModal(false); }}
                         className="w-full h-11 bg-[#6B6AFD] text-white rounded-xl text-sm font-semibold"
                     >
-                        Start Minting →
+                        {t('mint.start_minting')}
                     </button>
                 </div>
             </Modal>
