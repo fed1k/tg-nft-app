@@ -41,17 +41,26 @@ const Offers = () => {
   const getUsdPrice = (amountStr: string) => {
     const num = parseFloat(amountStr)
     if (isNaN(num)) return '$0.00'
-    if (amountStr.toLowerCase().includes('ton')) return `$${(num * 5.5).toFixed(2)}`
+    // Check 'stars' first — Stars amount strings contain "(≈ X TON)" so 'ton' would match too.
     if (amountStr.toLowerCase().includes('stars')) return `$${(num * 0.02).toFixed(2)}`
+    if (amountStr.toLowerCase().includes('ton')) return `$${(num * 5.5).toFixed(2)}`
     return '$0.00'
   }
 
   const handleAction = async (action: 'accept' | 'decline' | 'cancel', id: string) => {
     try {
-      if (action === 'accept') await userClient.acceptOffer(id)
-      else if (action === 'decline') await userClient.declineOffer(id)
-      else if (action === 'cancel') await userClient.cancelOffer(id)
-      queryClient.invalidateQueries({ queryKey: ['user-offers'] })
+      if (action === 'accept') {
+        await userClient.acceptOffer(id)
+        queryClient.invalidateQueries({ queryKey: ['user-offers'] })
+        // Stars offers are fully settled server-side. TON offers: the buyer's "Complete Purchase"
+        // button (visible in their Sent tab) directs them to the asset page to pay on-chain.
+      } else if (action === 'decline') {
+        await userClient.declineOffer(id)
+        queryClient.invalidateQueries({ queryKey: ['user-offers'] })
+      } else if (action === 'cancel') {
+        await userClient.cancelOffer(id)
+        queryClient.invalidateQueries({ queryKey: ['user-offers'] })
+      }
     } catch (err) {
       console.error(err)
     }
@@ -163,12 +172,12 @@ const Offers = () => {
                     </button>
                   )}
 
-                  {offer.direction === 'sent' && offer.status === 'Accepted' && (
+                  {offer.direction === 'sent' && offer.status === 'Accepted' && offer.assetId && (
                     <button
-                      onClick={() => navigate('/wallet')}
-                      className="w-full bg-white mt-4 border border-[#666F8B33] text-[#666F8B] py-2.5 rounded-lg text-xs font-medium hover:bg-[#666F8B0D] transition-colors"
+                      onClick={() => navigate(`/asset/${offer.assetId}`)}
+                      className="w-full bg-[#6B6AFD] text-white mt-4 py-2.5 rounded-lg text-xs font-semibold hover:bg-[#5856D6] transition-colors"
                     >
-                      View Transactions
+                      Complete Purchase →
                     </button>
                   )}
 

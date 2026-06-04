@@ -3226,13 +3226,6 @@ app.post('/api/user/assets/:id/buy', async (req, res) => {
     const platformFeeStars = Math.round((priceStars * platformFeePercent) / 100)
     const sellerPayoutStars = Math.max(0, priceStars - platformFeeStars)
 
-    const buyerStars = Number(actor.stars) || 0
-    if (buyerStars < priceStars) {
-      return res.status(400).json({
-        message: `Insufficient Stars balance (need ${priceStars}, have ${buyerStars}). Top up in Wallet.`,
-      })
-    }
-
     const owner = asset.ownerUserId ? await AdminUser.findById(asset.ownerUserId) : null
     const sellerUser =
       owner ||
@@ -3248,8 +3241,29 @@ app.post('/api/user/assets/:id/buy', async (req, res) => {
       return res.status(400).json({ message: 'You cannot buy your own listing' })
     }
 
-    actor.stars = buyerStars - priceStars
-    await actor.save()
+    // Atomically reserve the asset — prevents two concurrent buyers from both purchasing.
+    const reserved = await AdminAsset.findOneAndUpdate(
+      { _id: asset._id, status: 'Active' },
+      { $set: { status: 'Owned', ownerUserId: actor._id, username: buyerName } },
+      { new: false },
+    )
+    if (!reserved) {
+      return res.status(409).json({ message: 'This asset has just been sold or removed.' })
+    }
+
+    // Atomically deduct Stars — reverts asset reservation on insufficient balance.
+    const debitResult = await AdminUser.findOneAndUpdate(
+      { _id: actor._id, stars: { $gte: priceStars } },
+      { $inc: { stars: -priceStars } },
+      { new: true },
+    )
+    if (!debitResult) {
+      // Revert the reservation so the listing stays active for other buyers.
+      await AdminAsset.updateOne({ _id: asset._id }, { $set: { status: 'Active', ownerUserId: reserved.ownerUserId, username: reserved.username } })
+      return res.status(400).json({
+        message: `Insufficient Stars balance (need ${priceStars}). Top up in Wallet.`,
+      })
+    }
 
     sellerUser.stars = (Number(sellerUser.stars) || 0) + sellerPayoutStars
     await sellerUser.save()
@@ -3258,10 +3272,6 @@ app.post('/api/user/assets/:id/buy', async (req, res) => {
       settings.platformStarsAccrued = (Number(settings.platformStarsAccrued) || 0) + platformFeeStars
       await settings.save()
     }
-
-    asset.status = 'Owned'
-    asset.ownerUserId = actor._id
-    await asset.save()
 
     const ref = String(txRef || '').trim() || `stars-${Date.now()}`
     await AdminTransaction.create({
@@ -3511,9 +3521,108 @@ app.get('/api/user/offers', async (req, res) => {
 app.post('/api/user/offers/:id/accept', async (req, res) => {
   const tx = await AdminTransaction.findById(req.params.id)
   if (!tx) return res.status(404).json({ message: 'Offer not found' })
+  if (tx.status !== 'Pending') {
+    return res.status(409).json({ message: `Offer is already ${tx.status.toLowerCase()}` })
+  }
+
+  const isStarsOffer = /settle in stars/i.test(String(tx.feeLabel || ''))
+
+  if (isStarsOffer && tx.assetId) {
+    // Auto-settle: deduct Stars from buyer, credit seller, transfer asset ownership.
+    const asset = await AdminAsset.findById(tx.assetId)
+    if (!asset || asset.status !== 'Active') {
+      return res.status(409).json({ message: 'Asset is no longer active — cannot settle this offer' })
+    }
+
+    // Verify caller is the seller (req._panelUser is resolved by the user middleware from initData).
+    const callerUser = req._panelUser
+    if (callerUser && asset.ownerUserId && String(callerUser._id) !== String(asset.ownerUserId)) {
+      return res.status(403).json({ message: 'Only the asset owner can accept this offer' })
+    }
+
+    // Parse Stars from "500 Stars (≈ 2.500 TON)" or "500 Stars"
+    const starsMatch = String(tx.amount || '').match(/^(\d+)\s*stars/i)
+    const priceStars = starsMatch ? Number(starsMatch[1]) : 0
+    if (priceStars < 1) {
+      return res.status(400).json({ message: 'Could not read Stars amount from offer — cannot auto-settle' })
+    }
+
+    // Find buyer by the fromUser handle stored on the transaction.
+    const buyer = await findUserByIdentityPriority({ username: tx.fromUser, telegramId: null, walletAddress: null })
+    if (!buyer) {
+      return res.status(409).json({ message: 'Buyer account not found — they may need to reopen the app' })
+    }
+    if (String(buyer._id) === String(asset.ownerUserId)) {
+      return res.status(400).json({ message: 'Buyer and seller are the same account' })
+    }
+
+    const seller = asset.ownerUserId ? await AdminUser.findById(asset.ownerUserId) : null
+
+    const settings = (await AdminSettings.findOne()) || (await AdminSettings.create({}))
+    const platformFeePercent = Number(settings.platformFeePercent) || 0
+    const platformFeeStars = Math.round((priceStars * platformFeePercent) / 100)
+    const sellerPayoutStars = Math.max(0, priceStars - platformFeeStars)
+
+    // Atomic debit — fails if buyer no longer has enough Stars.
+    const debitResult = await AdminUser.findOneAndUpdate(
+      { _id: buyer._id, stars: { $gte: priceStars } },
+      { $inc: { stars: -priceStars } },
+      { new: true },
+    )
+    if (!debitResult) {
+      return res.status(400).json({
+        message: `Buyer has insufficient Stars to settle this offer (needs ${priceStars})`,
+      })
+    }
+
+    if (seller) {
+      seller.stars = (Number(seller.stars) || 0) + sellerPayoutStars
+      await seller.save()
+    }
+    if (platformFeeStars > 0) {
+      settings.platformStarsAccrued = (Number(settings.platformStarsAccrued) || 0) + platformFeeStars
+      await settings.save()
+    }
+
+    // Transfer ownership.
+    const buyerHandle =
+      sanitizeUsername(buyer.username) ||
+      (buyer.telegramId ? `@user${buyer.telegramId}` : `@collector_${String(buyer._id).slice(-6)}`)
+    asset.status = 'Owned'
+    asset.ownerUserId = buyer._id
+    asset.username = buyerHandle
+    await asset.save()
+
+    await AdminTransaction.create({
+      icon: '/bag-2.svg',
+      name: `Offer settled • ${asset.title}`,
+      type: 'Swap',
+      fromUser: buyer.username || buyer.name,
+      toUser: seller ? (seller.username || seller.name) : tx.toUser,
+      amount: `${priceStars} Stars`,
+      feeLabel: `Offer accepted · Platform ${platformFeeStars} ★ (${platformFeePercent.toFixed(2)}%) · Seller ${sellerPayoutStars} ★`,
+    })
+    await AdminAlert.create({
+      icon: '/verify.svg',
+      title: 'Offer settled (Stars)',
+      subtitle: `${asset.title} — buyer ${buyer.username || buyer.name}`,
+      timeBadge: 'Now',
+    })
+
+    tx.status = 'Accepted'
+    await tx.save()
+    return res.json({ ok: true, settled: true, message: 'Offer accepted and settled — Stars transferred and asset ownership updated.' })
+  }
+
+  // TON/crypto offer: mark as accepted; buyer must complete the on-chain payment separately.
   tx.status = 'Accepted'
   await tx.save()
-  res.json({ ok: true, message: 'Offer accepted' })
+  res.json({
+    ok: true,
+    settled: false,
+    assetId: tx.assetId ? String(tx.assetId) : undefined,
+    message: 'Offer accepted. The buyer must now send the TON payment — share the asset page link with them to complete checkout.',
+  })
 })
 
 app.post('/api/user/offers/:id/decline', async (req, res) => {

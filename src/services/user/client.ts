@@ -388,9 +388,10 @@ export const userClient = {
     ),
 
   acceptOffer: async (id: string) =>
-    api<{ ok: boolean; message: string }>(`/offers/${encodeURIComponent(id)}/accept`, {
-      method: 'POST',
-    }),
+    api<{ ok: boolean; message: string; settled: boolean; assetId?: string }>(
+      `/offers/${encodeURIComponent(id)}/accept`,
+      { method: 'POST' },
+    ),
 
   declineOffer: async (id: string) =>
     api<{ ok: boolean; message: string }>(`/offers/${encodeURIComponent(id)}/decline`, {
