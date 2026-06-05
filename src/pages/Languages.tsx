@@ -36,7 +36,7 @@ const Languages = () => {
           <p>02 Selected</p>
         </div>
         {LANGUAGES.map((l) => {
-          const active = lang === l.code
+          const active = activeLang === l.code
           return (
             <button
               key={l.code}
