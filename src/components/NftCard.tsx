@@ -36,7 +36,7 @@ const NftCard = ({
     const { user, webApp } = useTelegram()
     const { isFavorite, toggle } = useFavorites(user?.id)
     const FALLBACK_IMAGE = '/crystal-cube.jpg'
-    const IPFS_GATEWAYS = ['https://gateway.pinata.cloud/ipfs/','https://ipfs.io/ipfs/', 'https://cloudflare-ipfs.com/ipfs/']
+    const IPFS_GATEWAYS = ['https://gateway.pinata.cloud/ipfs/', 'https://ipfs.io/ipfs/', 'https://cloudflare-ipfs.com/ipfs/']
     const [gatewayIdx, setGatewayIdx] = useState(0)
     const [imgSrc, setImgSrc] = useState<string>('')
 
@@ -68,7 +68,7 @@ const NftCard = ({
 
     return (
         <div className="border max-w-[166px] relative border-[#666F8B33] rounded-3xl px-2 pt-2 pb-5 bg-[#6B6AFD0D]">
-            <div className="bg-[#0E06361A] h-[107px] w-[150px] absolute z-10 rounded-2xl"></div>
+
             {!adminMode && !collectionMode && fid ? (
                 <button
                     type="button"
@@ -83,7 +83,7 @@ const NftCard = ({
                 >
                     <img
                         src={favorited ? '/heart-filled.svg' : '/heart.svg'}
-                        className={`w-3.5 h-3.5 ${favorited ? '' : 'filter brightness-0 invert'}`}
+                        className={`w-3.5 z-50 h-3.5 ${favorited ? '' : 'filter brightness-0 invert'}`}
                         alt=""
                     />
                 </button>
@@ -98,26 +98,29 @@ const NftCard = ({
                     {ownershipLabel}
                 </span>
             )}
-            <img
-                className="w-[150px] h-[107px] rounded-2xl cursor-pointer"
-                src={resolvedImage}
-                alt={title}
-                onError={() => {
-                    console.error('[NftCard] image load failed', {
-                        id,
-                        title,
-                        nftRaw: nft,
-                        failedSrc: resolvedImage,
-                        fallback: FALLBACK_IMAGE,
-                    })
-                    if (ipfsPathFromAny && gatewayIdx < IPFS_GATEWAYS.length - 1) {
-                        setGatewayIdx((v) => v + 1)
-                        return
-                    }
-                    if (resolvedImage !== FALLBACK_IMAGE) setImgSrc(FALLBACK_IMAGE)
-                }}
-                onClick={() => (adminMode ? onAdminManage?.() : navigate(`/asset/${id}`))}
-            />
+            <div className='relative max-w-[150px] h-[107px] flex'>
+                <div className="bg-[#0E06361A] w-full h-full absolute z-10 rounded-2xl"></div>
+                <img
+                    className="w-full h-full rounded-2xl cursor-pointer"
+                    src={resolvedImage}
+                    alt={title}
+                    onError={() => {
+                        console.error('[NftCard] image load failed', {
+                            id,
+                            title,
+                            nftRaw: nft,
+                            failedSrc: resolvedImage,
+                            fallback: FALLBACK_IMAGE,
+                        })
+                        if (ipfsPathFromAny && gatewayIdx < IPFS_GATEWAYS.length - 1) {
+                            setGatewayIdx((v) => v + 1)
+                            return
+                        }
+                        if (resolvedImage !== FALLBACK_IMAGE) setImgSrc(FALLBACK_IMAGE)
+                    }}
+                    onClick={() => (adminMode ? onAdminManage?.() : navigate(`/asset/${id}`))}
+                />
+            </div>
             <p
                 className="pt-4 pb-2 text-xs font-medium text-[#0E0636] cursor-pointer"
                 onClick={() => (adminMode ? onAdminManage?.() : navigate(`/asset/${id}`))}

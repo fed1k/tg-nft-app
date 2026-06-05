@@ -120,7 +120,7 @@ const en = {
 
   // Language page
   'lang.title': 'Language',
-  'lang.subtitle': 'Choose your preferred language',
+  'lang.subtitle': 'Choose your preferred language for the GiftedForge platform.',
   'lang.en': 'English',
   'lang.en_region': 'English (United States)',
   'lang.ru': 'Русский',
@@ -344,7 +344,7 @@ const ru: typeof en = {
 
   // Language page
   'lang.title': 'Язык',
-  'lang.subtitle': 'Выберите предпочтительный язык',
+  'lang.subtitle': 'Выберите предпочитаемый язык для платформы GiftedForge.',
   'lang.en': 'English',
   'lang.en_region': 'English (United States)',
   'lang.ru': 'Русский',
