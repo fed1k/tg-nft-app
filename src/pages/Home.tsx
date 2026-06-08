@@ -137,6 +137,25 @@ const Home = () => {
                 </div>
             </div>
 
+            {/* Wallet connect prompt */}
+            {!walletConnected && (
+                <div className="mt-4 rounded-[20px] bg-[#0E0636] border border-[#6B6AFD33] px-4 py-3">
+                    <p className='text-[#FFFFFFCC] text-[8px]'>Congratulations on joining the platform!</p>
+                    <div className="pt-2">
+                        <p className="text-xs text-white font-medium leading-relaxed">
+                            Connect your TON wallet to start minting NFTs, earning rewards, and accessing the marketplace.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => navigate('/app/wallet')}
+                            className="mt-3 border-b border-white text-[8px] text-white"
+                        >
+                            {t('common.connect_wallet')}
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-4 pt-6">
                 <div className='py-5 shrink-0 w-[174px] px-4 rounded-[20px] bg-[#F5F7FB]'>
