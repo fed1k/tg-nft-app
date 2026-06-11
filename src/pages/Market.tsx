@@ -4,6 +4,7 @@ import { useTonAddress, useTonWallet } from '@tonconnect/ui-react'
 import { useAccount } from 'wagmi'
 import NftCard from '../components/NftCard'
 import GiftListingCard from '../components/GiftListingCard'
+import MyListingCard from '../components/MyListingCard'
 import { useTelegram } from '../contexts/TelegramContext'
 import { userClient } from '../services/user'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -254,14 +255,16 @@ const Market = () => {
             ) : filtered.length > 0 ? (
                 <div className="grid grid-cols-2 gap-x-3.5 gap-y-6 px-3">
                     {filtered.map(nft => (
-                        <NftCard
-                            key={nft.id}
-                            id={nft.id}
-                            title={nft.title}
-                            username={nft.username}
-                            price={nft.price}
-                            nft={nft.nft}
-                        />
+                        activeTab === "My Listing's"
+                            ? <MyListingCard key={nft.id} asset={nft} />
+                            : <NftCard
+                                key={nft.id}
+                                id={nft.id}
+                                title={nft.title}
+                                username={nft.username}
+                                price={nft.price}
+                                nft={nft.nft}
+                              />
                     ))}
                 </div>
             ) : (
