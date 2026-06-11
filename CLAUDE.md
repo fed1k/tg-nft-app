@@ -36,7 +36,11 @@ Entry point is [src/main.jsx](src/main.jsx), which sets up React Router and wrap
 
 Routes split into `/app/*` (user-facing, guarded by `RequireAppAccess`) and `/admin/*` (guarded by `RequireAdmin`). The `/offers`, `/swap`, `/languages`, and `/asset/:id` paths are top-level outside `/app`.
 
+**Data fetching:** All remote data is fetched with `@tanstack/react-query`. Admin pages share a centralized query key factory `adminQk` from [src/pages/admin/queryKeys.ts](src/pages/admin/queryKeys.ts) — always use it when adding admin queries so invalidations work correctly.
+
 API calls use plain `fetch` via [src/services/user/client.ts](src/services/user/client.ts) and [src/services/admin/client.ts](src/services/admin/client.ts). Both clients send `initData` in the `X-Telegram-Init-Data` header. The admin client **also** appends `initData` as a query param (`?initData=...`). Default request timeout is 12s; mint resume is 25s.
+
+**Dual wallet support:** The app supports two wallet types simultaneously. TON wallets connect via TonConnect (used for on-chain NFT minting, transfers, and TON-priced purchases). EVM wallets (Ethereum/Polygon/BSC/Base) connect via Wagmi + RainbowKit — the `walletType` field on transactions records which was used. Both wallet addresses can be associated with a single user account.
 
 Blockchain payloads are built off-chain in [src/utils/tonNft.ts](src/utils/tonNft.ts) and [src/utils/tonCollection.ts](src/utils/tonCollection.ts) using `@ton/core`, then sent via the connected wallet. `tonCollection.ts` contains hardcoded compiled BOC bytecode for the official TEP-62 NFT collection and item contracts.
 
@@ -66,7 +70,16 @@ Transaction types: `Mint`, `Swap`, `Gift`, `Deposit`, `Withdraw`.
 
 **Gift marketplace:** `GiftListing` records are created by sellers (only `giftKind: 'regular'` is supported). Buyers pay with Telegram Stars (deducted from in-app balance) or TON (on-chain to seller wallet). On successful purchase, the backend calls the Telegram Bot API to transfer the gift to the buyer.
 
+**In-app Stars balance:** The app maintains its own Stars ledger in MongoDB (field `stars` on `AdminUser`), separate from Telegram's native Stars. Stars are credited via `POST /api/user/stars/topup` (Telegram invoice flow) and debited on gift sends and star-priced marketplace purchases. TON payments bypass the in-app ledger entirely — they go directly on-chain between wallets.
+
+**Backend Telegram Bot API proxy:** The backend proxies several Telegram Bot API calls that require the bot token (which must not be exposed to the client): listing a user's owned gifts, fetching available gift catalog, fetching sticker/thumbnail previews, sending gifts, and transferring gifts after marketplace purchase. All these are under `POST /api/user/telegram-gifts/*`.
+
 **Referral system:** User codes are `REF<telegramId>`. Completion is recorded on the user's first mint. Weekly leaderboards tracked with ISO week IDs.
+
+**Hardcoded constants (must stay in sync between frontend and backend):**
+- Asset categories: `3D Art`, `Collectibles`, `Gaming`
+- Market tabs: `Explore`, `StarGifts`
+- Dev CORS: backend auto-allows `localhost:5173`, `5174`, `5175` — no config needed for local dev
 
 ## Environment Variables
 

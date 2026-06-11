@@ -253,20 +253,26 @@ const Market = () => {
                     <p className="text-[#DA0909] text-sm">{t('market.error')}</p>
                 </div>
             ) : filtered.length > 0 ? (
-                <div className="grid grid-cols-2 gap-x-3.5 gap-y-6 px-3">
-                    {filtered.map(nft => (
-                        activeTab === "My Listing's"
-                            ? <MyListingCard key={nft.id} asset={nft} />
-                            : <NftCard
+                activeTab === "My Listing's" ? (
+                    <div className="flex flex-col gap-3 px-3">
+                        {filtered.map(nft => (
+                            <MyListingCard key={nft.id} asset={nft} />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 gap-x-3.5 gap-y-6 px-3">
+                        {filtered.map(nft => (
+                            <NftCard
                                 key={nft.id}
                                 id={nft.id}
                                 title={nft.title}
                                 username={nft.username}
                                 price={nft.price}
                                 nft={nft.nft}
-                              />
-                    ))}
-                </div>
+                            />
+                        ))}
+                    </div>
+                )
             ) : (
                 <div className="text-center py-16">
                     <p className="text-[#666F8B] text-sm">{t('market.no_data')}</p>
