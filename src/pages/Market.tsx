@@ -172,7 +172,7 @@ const Market = () => {
             </div>
 
             {/* Category Chips (NFT tabs only) */}
-            {!isGiftsTab ? (
+            {!isGiftsTab || activeTab !== "My Listing's" ? (
                 <div className="pl-3 flex gap-2 py-6 overflow-x-auto">
                     {CATEGORIES.map(cat => (
                         <button
