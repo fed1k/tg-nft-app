@@ -5,6 +5,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import express from 'express'
 import cors from 'cors'
 import mongoose from 'mongoose'
+import { chromium } from 'playwright'
 import {
   EMBEDDED_TELEGRAM_BOT_TOKEN,
   GIFTEDFORGE_FRONTEND_ORIGIN,
@@ -317,6 +318,19 @@ const giftListingSchema = new mongoose.Schema(
 )
 giftListingSchema.index({ status: 1, createdAt: -1 })
 
+const waitlistCodeSchema = new mongoose.Schema(
+  {
+    code: { type: String, required: true, unique: true, index: true, trim: true, uppercase: true },
+    used: { type: Boolean, default: false, index: true },
+    usedByEmail: { type: String, trim: true },
+    usedAt: { type: Date },
+    generatedByTelegramId: { type: Number },
+    referredByEmail: { type: String, trim: true }, // set when auto-generated as a user referral reward
+    expiresAt: { type: Date },
+  },
+  commonOpts,
+)
+
 const AdminUser = mongoose.models.AdminUser || mongoose.model('AdminUser', userSchema)
 const AdminAsset = mongoose.models.AdminAsset || mongoose.model('AdminAsset', assetSchema)
 const AdminTransaction =
@@ -329,6 +343,7 @@ const AdminAlert = mongoose.models.AdminAlert || mongoose.model('AdminAlert', al
 const PendingMint = mongoose.models.PendingMint || mongoose.model('PendingMint', pendingMintSchema)
 const GiftListing = mongoose.models.GiftListing || mongoose.model('GiftListing', giftListingSchema)
 const AdminReferral = mongoose.models.AdminReferral || mongoose.model('AdminReferral', referralRecordSchema)
+const WaitlistCode = mongoose.models.WaitlistCode || mongoose.model('WaitlistCode', waitlistCodeSchema)
 
 function fmtDate(date) {
   return new Date(date).toLocaleDateString('en-US', {
@@ -3702,6 +3717,227 @@ app.use((err, _req, res, _next) => {
     status: err.userStatus,
   })
 })
+
+// ─── Waitlist social verification ────────────────────────────────────────────
+
+/**
+ * Uses a headless Chromium browser to check if `handle` follows @GiftedForge
+ * via the sorsa.io playground (no API key required for the UI).
+ *
+ * sorsa.io response: { follow: bool, user_protected: bool }
+ * "follow" = true means Account B follows Account A.
+ * We set Account A = GiftedForge, Account B = user → follow=true means user follows GiftedForge.
+ */
+async function checkXFollowViaSorsa(handle) {
+  const cleanHandle = handle.replace(/^@/, '').trim()
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] })
+  const page = await browser.newPage()
+
+  let interceptedResult = null
+
+  // Capture any JSON response that looks like a follow-check result
+  page.on('response', async (response) => {
+    try {
+      const ct = response.headers()['content-type'] || ''
+      if (ct.includes('application/json')) {
+        const body = await response.json().catch(() => null)
+        if (body && typeof body.follow === 'boolean') interceptedResult = body
+      }
+    } catch { /* ignore */ }
+  })
+
+  try {
+    await page.goto('https://api.sorsa.io/playground/follow-check', {
+      waitUntil: 'domcontentloaded',
+      timeout: 20000,
+    })
+
+    // Fill Account A = GiftedForge, Account B = user handle
+    // The page labels inputs "Account A" and "Account B"
+    const inputs = page.locator('input[type="text"]')
+    await inputs.nth(0).fill('GiftedForge')
+    await inputs.nth(1).fill(cleanHandle)
+
+    // Click the check button
+    await page.getByRole('button', { name: /check/i }).click()
+
+    // Wait for the result — either network interception or DOM change
+    // Give the page up to 12s to respond
+    await page.waitForFunction(
+      () => document.body.innerText.includes('true') || document.body.innerText.includes('false'),
+      { timeout: 12000 },
+    ).catch(() => { /* timed out — fall through to DOM parse */ })
+
+    // Prefer intercepted API JSON (most reliable)
+    if (interceptedResult !== null) {
+      return { follows: interceptedResult.follow === true, protected: interceptedResult.user_protected === true }
+    }
+
+    // DOM fallback: look for "follow": true/false pattern in rendered page text
+    const text = await page.innerText('body')
+    const match = text.match(/"follow"\s*:\s*(true|false)/i) || text.match(/follow[^:]*:\s*(true|false)/i)
+    if (match) {
+      return { follows: match[1] === 'true', protected: false }
+    }
+
+    throw new Error('Could not read follow status from page')
+  } finally {
+    await browser.close()
+  }
+}
+
+/** Public: verify that a user follows @GiftedForge on X. Body: { username } */
+app.post('/api/waitlist/verify/follow', async (req, res) => {
+  const username = String(req.body.username || '').trim()
+  if (!username) return res.status(400).json({ message: 'username is required' })
+
+  try {
+    const result = await checkXFollowViaSorsa(username)
+    res.json(result)
+  } catch (err) {
+    console.error('[follow-check]', err?.message)
+    res.status(500).json({ message: 'Verification failed. Please try again.' })
+  }
+})
+
+// ─── Waitlist activation codes ────────────────────────────────────────────────
+
+/** Generates a code in the format YYYY-XXXXXX (e.g. 2026-9X7K2M). */
+function generateWaitlistCode() {
+  const year = new Date().getFullYear()
+  // Exclude ambiguous chars: O, I, 0, 1
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let rand = ''
+  for (let i = 0; i < 6; i++) {
+    rand += chars[Math.floor(Math.random() * chars.length)]
+  }
+  return `${year}-${rand}`
+}
+
+/** Admin: generate N activation codes. Body: { count?: number, expiresAt?: ISO string } */
+app.post('/api/admin/waitlist/codes/generate', async (req, res) => {
+  const count = Math.min(100, Math.max(1, Number(req.body.count) || 1))
+  const expiresAt = req.body.expiresAt ? new Date(req.body.expiresAt) : undefined
+
+  const codes = []
+  let attempts = 0
+  while (codes.length < count && attempts < count * 10) {
+    attempts++
+    const code = generateWaitlistCode()
+    try {
+      const doc = await WaitlistCode.create({
+        code,
+        generatedByTelegramId: req._adminId,
+        expiresAt,
+      })
+      codes.push(doc.code)
+    } catch (err) {
+      if (err.code === 11000) continue // duplicate — regenerate
+      throw err
+    }
+  }
+
+  res.status(201).json({ codes, count: codes.length })
+})
+
+/** Admin: list codes with optional ?used=true|false filter and pagination. */
+app.get('/api/admin/waitlist/codes', async (req, res) => {
+  const { used = '', sort = '-createdAt' } = req.query
+  const { limit, skip } = parsePageParams(req)
+  const query = {}
+  if (used === 'true') query.used = true
+  if (used === 'false') query.used = false
+
+  const total = await WaitlistCode.countDocuments(query)
+  const rows = await WaitlistCode.find(query).sort(parseSortParam(sort)).skip(skip).limit(limit)
+  res.set('x-total-count', String(total))
+  res.json(
+    rows.map((c) => ({
+      code: c.code,
+      used: c.used,
+      usedByEmail: c.usedByEmail || null,
+      usedAt: c.usedAt || null,
+      expiresAt: c.expiresAt || null,
+      createdAt: c.createdAt,
+    })),
+  )
+})
+
+/** Admin: revoke (delete) an unused code. */
+app.delete('/api/admin/waitlist/codes/:code', async (req, res) => {
+  const code = String(req.params.code || '').trim().toUpperCase()
+  const doc = await WaitlistCode.findOne({ code })
+  if (!doc) return res.status(404).json({ message: 'Code not found' })
+  if (doc.used) return res.status(409).json({ message: 'Cannot revoke a code that has already been used' })
+  await WaitlistCode.deleteOne({ code })
+  res.json({ ok: true })
+})
+
+/** Public: validate an activation code and mark it used atomically. Body: { code, email? } */
+app.post('/api/waitlist/codes/validate', async (req, res) => {
+  const rawCode = String(req.body.code || '').trim().toUpperCase()
+  const email = String(req.body.email || '').trim()
+
+  if (!rawCode) {
+    return res.status(400).json({ valid: false, reason: 'code_required' })
+  }
+
+  const now = new Date()
+
+  // Atomically claim the code — only succeeds if unused and not expired
+  const doc = await WaitlistCode.findOneAndUpdate(
+    {
+      code: rawCode,
+      used: false,
+      $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: now } }],
+    },
+    { $set: { used: true, usedAt: now, ...(email ? { usedByEmail: email } : {}) } },
+    { new: true },
+  )
+
+  if (doc) {
+    // Generate 3 referral codes the new user can share with friends
+    const referralCodes = []
+    let attempts = 0
+    while (referralCodes.length < 3 && attempts < 30) {
+      attempts++
+      const newCode = generateWaitlistCode()
+      try {
+        const ref = await WaitlistCode.create({
+          code: newCode,
+          ...(email ? { referredByEmail: email } : {}),
+        })
+        referralCodes.push(ref.code)
+      } catch (err) {
+        if (err.code === 11000) continue // collision — regenerate
+        break // unexpected error — stop trying, still return valid: true
+      }
+    }
+    return res.json({ valid: true, referralCodes })
+  }
+
+  // Distinguish between invalid vs already-used vs expired for better UX
+  const existing = await WaitlistCode.findOne({ code: rawCode }).lean()
+  if (!existing) return res.json({ valid: false, reason: 'invalid' })
+  if (existing.used) return res.json({ valid: false, reason: 'already_used' })
+  if (existing.expiresAt && existing.expiresAt <= now) return res.json({ valid: false, reason: 'expired' })
+  return res.json({ valid: false, reason: 'invalid' })
+})
+
+/** Public: referral stats for a given email — invited count + activated count. */
+app.get('/api/waitlist/stats', async (req, res) => {
+  const email = String(req.query.email || '').trim()
+  if (!email) return res.status(400).json({ message: 'email is required' })
+
+  const [invited, activated] = await Promise.all([
+    WaitlistCode.countDocuments({ referredByEmail: email }),
+    WaitlistCode.countDocuments({ referredByEmail: email, used: true }),
+  ])
+
+  res.json({ invited, activated })
+})
+
+// ──────────────────────────────────────────────────────────────────────────────
 
 app.use((req, res) => {
   console.log(`[404] ${req.method} ${req.originalUrl} - No route matched`)
