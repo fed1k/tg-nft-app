@@ -3751,32 +3751,34 @@ async function checkXFollowViaSorsa(handle) {
       return false
     }, { timeout: 20000 })
 
-    // Use the native HTMLInputElement value setter so React's controlled state
-    // actually updates — plain fill() sets the DOM value but React reads its
-    // own virtual state, which can lag and cause a stale submit.
-    await page.evaluate(([handle, target]) => {
-      const ins = document.querySelectorAll('input[type="text"]')
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
-      setter.call(ins[0], handle)
-      ins[0].dispatchEvent(new Event('input', { bubbles: true }))
-      setter.call(ins[1], target)
-      ins[1].dispatchEvent(new Event('input', { bubbles: true }))
-    }, [cleanHandle, 'GiftedForge'])
+    const inputs = page.locator('input[type="text"]')
 
-    // Log what actually gets submitted so we can verify the values are correct
+    // Clear then type character-by-character so React's synthetic event system
+    // picks up every keystroke — more reliable than fill() which can race with
+    // React re-renders on controlled inputs.
+    await inputs.nth(0).clear()
+    await inputs.nth(0).pressSequentially(cleanHandle, { delay: 30 })
+    await inputs.nth(1).clear()
+    await inputs.nth(1).pressSequentially('GiftedForge', { delay: 30 })
+
+    // Log the actual POST body and response so we can verify correctness
     page.on('request', (req) => {
       if (req.url().includes('check-follow') && req.method() === 'POST') {
-        console.log(`[follow-check] POST body for @${cleanHandle}:`, req.postData())
+        console.log(`[follow-check] POST body:`, req.postData())
       }
     })
 
-    // Listen for the API response BEFORE clicking
+    // Accept any status so we can see error responses too
     const resultPromise = page
       .waitForResponse(
-        (resp) => resp.url().includes('/playground/api/check-follow') && resp.status() === 200,
+        (resp) => resp.url().includes('/playground/api/check-follow'),
         { timeout: 15000 },
       )
-      .then((resp) => resp.json())
+      .then(async (resp) => {
+        const text = await resp.text()
+        console.log(`[follow-check] response ${resp.status()}:`, text)
+        return JSON.parse(text)
+      })
       .catch(() => null)
 
     await page.getByRole('button', { name: /check/i }).click()
