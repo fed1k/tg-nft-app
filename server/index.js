@@ -3730,72 +3730,40 @@ app.use((err, _req, res, _next) => {
  */
 async function checkXFollowViaSorsa(handle) {
   const cleanHandle = handle.replace(/^@/, '').trim()
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] })
-  const page = await browser.newPage()
 
-  try {
-    await page.goto('https://api.sorsa.io/playground/follow-check', {
-      waitUntil: 'domcontentloaded',
-      timeout: 20000,
-    })
+  // Nonce: base64 of current timestamp in ms — exactly how the sorsa.io browser client generates it.
+  // x-sorsa-client and x-sorsa-nonce are the two auth headers the API requires (discovered from
+  // intercepted request headers). No Playwright / browser needed.
+  const nonce = Buffer.from(String(Date.now())).toString('base64')
 
-    // Wait until React has hydrated — detected by React fiber being attached to a button.
-    // This is the reliable signal that click handlers are active.
-    await page.waitForFunction(() => {
-      const buttons = document.querySelectorAll('button')
-      for (const btn of buttons) {
-        if (Object.keys(btn).some((k) => k.startsWith('__reactFiber') || k.startsWith('__reactProps'))) {
-          return true
-        }
-      }
-      return false
-    }, { timeout: 20000 })
+  const resp = await fetch('https://api.sorsa.io/playground/api/check-follow', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': '*/*',
+      'Origin': 'https://api.sorsa.io',
+      'Referer': 'https://api.sorsa.io/playground/follow-check',
+      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'x-sorsa-client': 'sorsa-web-client-v1',
+      'x-sorsa-nonce': nonce,
+    },
+    body: JSON.stringify({ username_1: 'GiftedForge', username_2: cleanHandle }),
+  })
 
-    // Two POST requests fire: one auto-submit during input filling (wrong order)
-    // and one from our button click (correct order: username_1=user, username_2=GiftedForge).
-    // Use page.route to intercept ALL check-follow requests and resolve only on
-    // the one where username_1 matches our handle — ignoring the stale auto-submit.
-    let captureResolve, captureReject
-    const capturePromise = new Promise((res, rej) => {
-      captureResolve = res
-      captureReject = rej
-    })
-    const captureTimeout = setTimeout(
-      () => captureReject(new Error(`timeout waiting for follow-check response for @${cleanHandle}`)),
-      12000,
-    )
+  const text = await resp.text()
+  console.log(`[follow-check] @${cleanHandle} status=${resp.status}:`, text)
 
-    await page.route('**/check-follow', async (route) => {
-      const body = route.request().postDataJSON()
-      const response = await route.fetch()
-      const data = await response.json()
-      console.log(`[follow-check] intercepted ${JSON.stringify(body)} → ${JSON.stringify(data)}`)
-      await route.fulfill({ response })
-      if (body?.username_1 === cleanHandle) {
-        clearTimeout(captureTimeout)
-        captureResolve(data)
-      }
-    })
-
-    const inputs = page.locator('input[type="text"]')
-    await inputs.nth(0).clear()
-    await inputs.nth(0).pressSequentially(cleanHandle, { delay: 30 })
-    await inputs.nth(1).clear()
-    await inputs.nth(1).pressSequentially('GiftedForge', { delay: 30 })
-    await page.getByRole('button', { name: /check/i }).click()
-
-    const result = await capturePromise
-
-    console.log(`[follow-check] @${cleanHandle}:`, result)
-
-    if (result && typeof result.follow === 'boolean') {
-      return { follows: result.follow === true, protected: result.user_protected === true }
-    }
-
-    throw new Error(`Unexpected response for @${cleanHandle}: ${JSON.stringify(result)}`)
-  } finally {
-    await browser.close()
+  if (!resp.ok) {
+    throw new Error(`sorsa API ${resp.status}: ${text}`)
   }
+
+  const data = JSON.parse(text)
+
+  if (typeof data.follow !== 'boolean') {
+    throw new Error(`Unexpected response for @${cleanHandle}: ${text}`)
+  }
+
+  return { follows: data.follow === true, protected: data.user_protected === true }
 }
 
 /** Public: verify that a user follows @GiftedForge on X. Body: { username } */
