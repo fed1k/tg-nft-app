@@ -3755,46 +3755,37 @@ async function checkXFollowViaSorsa(handle) {
     })
 
     await page.goto('https://api.sorsa.io/playground/follow-check', {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded',
       timeout: 20000,
     })
 
-    // Log how many inputs and buttons the page has
-    const inputCount = await page.locator('input[type="text"]').count()
-    const buttonCount = await page.getByRole('button').count()
-    console.log(`[follow-check] page has ${inputCount} text inputs, ${buttonCount} buttons`)
+    // Wait for the form inputs to be ready
+    await page.locator('input[type="text"]').first().waitFor({ state: 'visible', timeout: 10000 })
 
     // Fill Account A = GiftedForge, Account B = user handle
     const inputs = page.locator('input[type="text"]')
     await inputs.nth(0).fill('GiftedForge')
     await inputs.nth(1).fill(cleanHandle)
 
-    // Click the check button and wait up to 15s for a network response with follow data
-    const resultPromise = new Promise((resolve) => {
-      const t = setTimeout(() => resolve(null), 15000)
-      page.on('response', async (resp) => {
-        try {
-          const body = await resp.json().catch(() => null)
-          if (body && typeof body.follow === 'boolean') { clearTimeout(t); resolve(body) }
-        } catch {}
-      })
-    })
+    // Wait specifically for the known API endpoint response
+    const resultPromise = page
+      .waitForResponse(
+        (resp) => resp.url().includes('/playground/api/check-follow') && resp.status() === 200,
+        { timeout: 15000 },
+      )
+      .then((resp) => resp.json())
+      .catch(() => null)
 
     await page.getByRole('button', { name: /check/i }).click()
 
     const result = await resultPromise
 
-    if (result) {
-      console.log(`[follow-check] @${cleanHandle} result:`, result)
+    if (result && typeof result.follow === 'boolean') {
+      console.log(`[follow-check] @${cleanHandle}:`, result)
       return { follows: result.follow === true, protected: result.user_protected === true }
     }
 
-    // No network result — take a screenshot and dump the full page text for debugging
-    await page.screenshot({ path: '/tmp/follow-check-debug.png', fullPage: true })
-    const fullText = await page.innerText('body')
-    console.log(`[follow-check] @${cleanHandle} no network result. full body text:\n${fullText}`)
-
-    throw new Error(`Could not determine follow status for @${cleanHandle} — check /tmp/follow-check-debug.png`)
+    throw new Error(`No response from follow-check API for @${cleanHandle}`)
   } finally {
     await browser.close()
   }
