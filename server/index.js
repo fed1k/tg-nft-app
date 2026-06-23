@@ -3734,58 +3734,51 @@ async function checkXFollowViaSorsa(handle) {
   const page = await browser.newPage()
 
   try {
-    // Log every request so we can see what URL the playground calls
-    page.on('request', (req) => {
-      if (['POST', 'PUT'].includes(req.method()) || req.url().includes('follow') || req.url().includes('check')) {
-        console.log(`[follow-check] → ${req.method()} ${req.url()}`)
-      }
-    })
-
-    // Log every JSON response
-    const capturedResults = []
-    page.on('response', async (resp) => {
-      try {
-        const ct = resp.headers()['content-type'] || ''
-        if (ct.includes('application/json')) {
-          const body = await resp.json().catch(() => null)
-          console.log(`[follow-check] ← ${resp.status()} ${resp.url()} body=${JSON.stringify(body)}`)
-          if (body && typeof body.follow === 'boolean') capturedResults.push(body)
-        }
-      } catch {}
-    })
-
+    // Navigate to the page so the browser picks up cookies/session state
     await page.goto('https://api.sorsa.io/playground/follow-check', {
-      waitUntil: 'domcontentloaded',
+      waitUntil: 'load',
       timeout: 20000,
     })
 
-    // Wait for the form inputs to be ready
-    await page.locator('input[type="text"]').first().waitFor({ state: 'visible', timeout: 10000 })
+    // Wait for the page JS to initialise
+    await page.waitForTimeout(1500)
 
-    // Fill Account A = GiftedForge, Account B = user handle
-    const inputs = page.locator('input[type="text"]')
-    await inputs.nth(0).fill('GiftedForge')
-    await inputs.nth(1).fill(cleanHandle)
+    // Call the API directly from inside the browser context instead of clicking the button.
+    // This avoids React hydration timing issues and is much more reliable.
+    // We try the two most likely body formats.
+    const bodyFormats = [
+      { account_a: 'GiftedForge', account_b: cleanHandle },
+      { accountA: 'GiftedForge', accountB: cleanHandle },
+      { a: 'GiftedForge', b: cleanHandle },
+    ]
 
-    // Wait specifically for the known API endpoint response
-    const resultPromise = page
-      .waitForResponse(
-        (resp) => resp.url().includes('/playground/api/check-follow') && resp.status() === 200,
-        { timeout: 15000 },
-      )
-      .then((resp) => resp.json())
-      .catch(() => null)
+    let result = null
+    for (const body of bodyFormats) {
+      result = await page.evaluate(async (payload) => {
+        try {
+          const resp = await fetch('/playground/api/check-follow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (!resp.ok) return null
+          const data = await resp.json()
+          return typeof data.follow === 'boolean' ? data : null
+        } catch {
+          return null
+        }
+      }, body)
 
-    await page.getByRole('button', { name: /check/i }).click()
+      if (result) break
+    }
 
-    const result = await resultPromise
+    console.log(`[follow-check] @${cleanHandle}:`, result)
 
     if (result && typeof result.follow === 'boolean') {
-      console.log(`[follow-check] @${cleanHandle}:`, result)
       return { follows: result.follow === true, protected: result.user_protected === true }
     }
 
-    throw new Error(`No response from follow-check API for @${cleanHandle}`)
+    throw new Error(`No valid response from follow-check API for @${cleanHandle}`)
   } finally {
     await browser.close()
   }
