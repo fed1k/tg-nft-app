@@ -3733,68 +3733,68 @@ async function checkXFollowViaSorsa(handle) {
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] })
   const page = await browser.newPage()
 
-  let interceptedResult = null
-
   try {
+    // Log every request so we can see what URL the playground calls
+    page.on('request', (req) => {
+      if (['POST', 'PUT'].includes(req.method()) || req.url().includes('follow') || req.url().includes('check')) {
+        console.log(`[follow-check] → ${req.method()} ${req.url()}`)
+      }
+    })
+
+    // Log every JSON response
+    const capturedResults = []
+    page.on('response', async (resp) => {
+      try {
+        const ct = resp.headers()['content-type'] || ''
+        if (ct.includes('application/json')) {
+          const body = await resp.json().catch(() => null)
+          console.log(`[follow-check] ← ${resp.status()} ${resp.url()} body=${JSON.stringify(body)}`)
+          if (body && typeof body.follow === 'boolean') capturedResults.push(body)
+        }
+      } catch {}
+    })
+
     await page.goto('https://api.sorsa.io/playground/follow-check', {
       waitUntil: 'networkidle',
       timeout: 20000,
     })
 
-    // Snapshot page text BEFORE submitting so we can detect what changed
-    const textBefore = await page.innerText('body')
+    // Log how many inputs and buttons the page has
+    const inputCount = await page.locator('input[type="text"]').count()
+    const buttonCount = await page.getByRole('button').count()
+    console.log(`[follow-check] page has ${inputCount} text inputs, ${buttonCount} buttons`)
 
     // Fill Account A = GiftedForge, Account B = user handle
     const inputs = page.locator('input[type="text"]')
     await inputs.nth(0).fill('GiftedForge')
     await inputs.nth(1).fill(cleanHandle)
 
-    // Start intercepting responses only AFTER filling the form
-    page.on('response', async (response) => {
-      try {
-        const ct = response.headers()['content-type'] || ''
-        if (ct.includes('application/json')) {
-          const body = await response.json().catch(() => null)
-          if (body && typeof body.follow === 'boolean') interceptedResult = body
-        }
-      } catch { /* ignore */ }
+    // Click the check button and wait up to 15s for a network response with follow data
+    const resultPromise = new Promise((resolve) => {
+      const t = setTimeout(() => resolve(null), 15000)
+      page.on('response', async (resp) => {
+        try {
+          const body = await resp.json().catch(() => null)
+          if (body && typeof body.follow === 'boolean') { clearTimeout(t); resolve(body) }
+        } catch {}
+      })
     })
 
-    // Click the check button
     await page.getByRole('button', { name: /check/i }).click()
 
-    // Wait for the DOM to change from its pre-click state (up to 12s)
-    await page.waitForFunction(
-      (before) => document.body.innerText !== before,
-      textBefore,
-      { timeout: 12000 },
-    ).catch(() => {})
+    const result = await resultPromise
 
-    // Prefer intercepted API JSON (most reliable)
-    if (interceptedResult !== null) {
-      console.log(`[follow-check] @${cleanHandle} intercepted:`, interceptedResult)
-      return { follows: interceptedResult.follow === true, protected: interceptedResult.user_protected === true }
+    if (result) {
+      console.log(`[follow-check] @${cleanHandle} result:`, result)
+      return { follows: result.follow === true, protected: result.user_protected === true }
     }
 
-    // DOM fallback: diff the page text — only look at NEW content added after clicking
-    const textAfter = await page.innerText('body')
-    console.log(`[follow-check] @${cleanHandle} DOM before: ${textBefore.slice(0, 200)}`)
-    console.log(`[follow-check] @${cleanHandle} DOM after:  ${textAfter.slice(0, 200)}`)
+    // No network result — take a screenshot and dump the full page text for debugging
+    await page.screenshot({ path: '/tmp/follow-check-debug.png', fullPage: true })
+    const fullText = await page.innerText('body')
+    console.log(`[follow-check] @${cleanHandle} no network result. full body text:\n${fullText}`)
 
-    // Only search the new portion of the text for "follow": true/false
-    const newText = textAfter.replace(textBefore, '')
-    const match = newText.match(/"follow"\s*:\s*(true|false)/i)
-    if (match) {
-      return { follows: match[1] === 'true', protected: false }
-    }
-
-    // Last resort: look anywhere in updated text for the strict JSON pattern
-    const strictMatch = textAfter.match(/"follow"\s*:\s*(true|false)/i)
-    if (strictMatch) {
-      return { follows: strictMatch[1] === 'true', protected: false }
-    }
-
-    throw new Error(`Could not determine follow status for @${cleanHandle}`)
+    throw new Error(`Could not determine follow status for @${cleanHandle} — check /tmp/follow-check-debug.png`)
   } finally {
     await browser.close()
   }
