@@ -3751,39 +3751,40 @@ async function checkXFollowViaSorsa(handle) {
       return false
     }, { timeout: 20000 })
 
-    const inputs = page.locator('input[type="text"]')
+    // Two POST requests fire: one auto-submit during input filling (wrong order)
+    // and one from our button click (correct order: username_1=user, username_2=GiftedForge).
+    // Use page.route to intercept ALL check-follow requests and resolve only on
+    // the one where username_1 matches our handle — ignoring the stale auto-submit.
+    let captureResolve, captureReject
+    const capturePromise = new Promise((res, rej) => {
+      captureResolve = res
+      captureReject = rej
+    })
+    const captureTimeout = setTimeout(
+      () => captureReject(new Error(`timeout waiting for follow-check response for @${cleanHandle}`)),
+      12000,
+    )
 
-    // Clear then type character-by-character so React's synthetic event system
-    // picks up every keystroke — more reliable than fill() which can race with
-    // React re-renders on controlled inputs.
+    await page.route('**/check-follow', async (route) => {
+      const body = route.request().postDataJSON()
+      const response = await route.fetch()
+      const data = await response.json()
+      console.log(`[follow-check] intercepted ${JSON.stringify(body)} → ${JSON.stringify(data)}`)
+      await route.fulfill({ response })
+      if (body?.username_1 === cleanHandle) {
+        clearTimeout(captureTimeout)
+        captureResolve(data)
+      }
+    })
+
+    const inputs = page.locator('input[type="text"]')
     await inputs.nth(0).clear()
     await inputs.nth(0).pressSequentially(cleanHandle, { delay: 30 })
     await inputs.nth(1).clear()
     await inputs.nth(1).pressSequentially('GiftedForge', { delay: 30 })
-
-    // Log the actual POST body and response so we can verify correctness
-    page.on('request', (req) => {
-      if (req.url().includes('check-follow') && req.method() === 'POST') {
-        console.log(`[follow-check] POST body:`, req.postData())
-      }
-    })
-
-    // Accept any status so we can see error responses too
-    const resultPromise = page
-      .waitForResponse(
-        (resp) => resp.url().includes('/playground/api/check-follow'),
-        { timeout: 15000 },
-      )
-      .then(async (resp) => {
-        const text = await resp.text()
-        console.log(`[follow-check] response ${resp.status()}:`, text)
-        return JSON.parse(text)
-      })
-      .catch(() => null)
-
     await page.getByRole('button', { name: /check/i }).click()
 
-    const result = await resultPromise
+    const result = await capturePromise
 
     console.log(`[follow-check] @${cleanHandle}:`, result)
 
@@ -3791,7 +3792,7 @@ async function checkXFollowViaSorsa(handle) {
       return { follows: result.follow === true, protected: result.user_protected === true }
     }
 
-    throw new Error(`No response from follow-check API for @${cleanHandle}`)
+    throw new Error(`Unexpected response for @${cleanHandle}: ${JSON.stringify(result)}`)
   } finally {
     await browser.close()
   }
