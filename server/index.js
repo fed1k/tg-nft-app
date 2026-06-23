@@ -3734,54 +3734,48 @@ async function checkXFollowViaSorsa(handle) {
   const page = await browser.newPage()
 
   try {
-    // Navigate to the page so the browser picks up cookies/session state
     await page.goto('https://api.sorsa.io/playground/follow-check', {
-      waitUntil: 'load',
+      waitUntil: 'domcontentloaded',
       timeout: 20000,
     })
 
-    // Wait for the page JS to initialise
-    await page.waitForTimeout(1500)
-
-    // Call the API directly from inside the browser context.
-    // Log the raw status + body for every format so we can debug the exact format the API expects.
-    const debug = await page.evaluate(async ({ accountA, accountB }) => {
-      const formats = [
-        { account_a: accountA, account_b: accountB },
-        { accountA, accountB },
-        { a: accountA, b: accountB },
-        { username_a: accountA, username_b: accountB },
-      ]
-      const results = []
-      for (const body of formats) {
-        try {
-          const resp = await fetch('/playground/api/check-follow', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          })
-          const text = await resp.text()
-          results.push({ body, status: resp.status, response: text })
-        } catch (e) {
-          results.push({ body, error: String(e) })
+    // Wait until React has hydrated — detected by React fiber being attached to a button.
+    // This is the reliable signal that click handlers are active.
+    await page.waitForFunction(() => {
+      const buttons = document.querySelectorAll('button')
+      for (const btn of buttons) {
+        if (Object.keys(btn).some((k) => k.startsWith('__reactFiber') || k.startsWith('__reactProps'))) {
+          return true
         }
       }
-      return results
-    }, { accountA: 'GiftedForge', accountB: cleanHandle })
+      return false
+    }, { timeout: 20000 })
 
-    console.log(`[follow-check] @${cleanHandle} debug:`, JSON.stringify(debug))
+    // Fill Account A = GiftedForge, Account B = user handle
+    const inputs = page.locator('input[type="text"]')
+    await inputs.nth(0).fill('GiftedForge')
+    await inputs.nth(1).fill(cleanHandle)
 
-    const hit = debug.find((d) => {
-      try { const p = JSON.parse(d.response); return typeof p.follow === 'boolean' } catch { return false }
-    })
+    // Listen for the API response BEFORE clicking
+    const resultPromise = page
+      .waitForResponse(
+        (resp) => resp.url().includes('/playground/api/check-follow') && resp.status() === 200,
+        { timeout: 15000 },
+      )
+      .then((resp) => resp.json())
+      .catch(() => null)
 
-    if (hit) {
-      const data = JSON.parse(hit.response)
-      console.log(`[follow-check] @${cleanHandle} result:`, data)
-      return { follows: data.follow === true, protected: data.user_protected === true }
+    await page.getByRole('button', { name: /check/i }).click()
+
+    const result = await resultPromise
+
+    console.log(`[follow-check] @${cleanHandle}:`, result)
+
+    if (result && typeof result.follow === 'boolean') {
+      return { follows: result.follow === true, protected: result.user_protected === true }
     }
 
-    throw new Error(`No valid response from follow-check API for @${cleanHandle}`)
+    throw new Error(`No response from follow-check API for @${cleanHandle}`)
   } finally {
     await browser.close()
   }
