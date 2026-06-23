@@ -3751,10 +3751,11 @@ async function checkXFollowViaSorsa(handle) {
       return false
     }, { timeout: 20000 })
 
-    // Fill Account A = GiftedForge, Account B = user handle
+    // Account A = user handle, Account B = GiftedForge
+    // follow: true means Account A follows Account B (user follows GiftedForge)
     const inputs = page.locator('input[type="text"]')
-    await inputs.nth(0).fill('GiftedForge')
-    await inputs.nth(1).fill(cleanHandle)
+    await inputs.nth(0).fill(cleanHandle)
+    await inputs.nth(1).fill('GiftedForge')
 
     // Listen for the API response BEFORE clicking
     const resultPromise = page
@@ -3791,7 +3792,7 @@ app.post('/api/waitlist/verify/follow', async (req, res) => {
     res.json(result)
   } catch (err) {
     console.error('[follow-check]', err?.message)
-    res.status(500).json({ message: 'Verification failed. Please try again.' })
+    res.status(404).json({ follows: false, message: 'Could not find this X account. Check the username and try again.' })
   }
 })
 
