@@ -3743,39 +3743,42 @@ async function checkXFollowViaSorsa(handle) {
     // Wait for the page JS to initialise
     await page.waitForTimeout(1500)
 
-    // Call the API directly from inside the browser context instead of clicking the button.
-    // This avoids React hydration timing issues and is much more reliable.
-    // We try the two most likely body formats.
-    const bodyFormats = [
-      { account_a: 'GiftedForge', account_b: cleanHandle },
-      { accountA: 'GiftedForge', accountB: cleanHandle },
-      { a: 'GiftedForge', b: cleanHandle },
-    ]
-
-    let result = null
-    for (const body of bodyFormats) {
-      result = await page.evaluate(async (payload) => {
+    // Call the API directly from inside the browser context.
+    // Log the raw status + body for every format so we can debug the exact format the API expects.
+    const debug = await page.evaluate(async ({ accountA, accountB }) => {
+      const formats = [
+        { account_a: accountA, account_b: accountB },
+        { accountA, accountB },
+        { a: accountA, b: accountB },
+        { username_a: accountA, username_b: accountB },
+      ]
+      const results = []
+      for (const body of formats) {
         try {
           const resp = await fetch('/playground/api/check-follow', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(body),
           })
-          if (!resp.ok) return null
-          const data = await resp.json()
-          return typeof data.follow === 'boolean' ? data : null
-        } catch {
-          return null
+          const text = await resp.text()
+          results.push({ body, status: resp.status, response: text })
+        } catch (e) {
+          results.push({ body, error: String(e) })
         }
-      }, body)
+      }
+      return results
+    }, { accountA: 'GiftedForge', accountB: cleanHandle })
 
-      if (result) break
-    }
+    console.log(`[follow-check] @${cleanHandle} debug:`, JSON.stringify(debug))
 
-    console.log(`[follow-check] @${cleanHandle}:`, result)
+    const hit = debug.find((d) => {
+      try { const p = JSON.parse(d.response); return typeof p.follow === 'boolean' } catch { return false }
+    })
 
-    if (result && typeof result.follow === 'boolean') {
-      return { follows: result.follow === true, protected: result.user_protected === true }
+    if (hit) {
+      const data = JSON.parse(hit.response)
+      console.log(`[follow-check] @${cleanHandle} result:`, data)
+      return { follows: data.follow === true, protected: data.user_protected === true }
     }
 
     throw new Error(`No valid response from follow-check API for @${cleanHandle}`)
