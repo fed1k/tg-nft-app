@@ -3735,52 +3735,66 @@ async function checkXFollowViaSorsa(handle) {
 
   let interceptedResult = null
 
-  // Capture any JSON response that looks like a follow-check result
-  page.on('response', async (response) => {
-    try {
-      const ct = response.headers()['content-type'] || ''
-      if (ct.includes('application/json')) {
-        const body = await response.json().catch(() => null)
-        if (body && typeof body.follow === 'boolean') interceptedResult = body
-      }
-    } catch { /* ignore */ }
-  })
-
   try {
     await page.goto('https://api.sorsa.io/playground/follow-check', {
-      waitUntil: 'domcontentloaded',
+      waitUntil: 'networkidle',
       timeout: 20000,
     })
 
+    // Snapshot page text BEFORE submitting so we can detect what changed
+    const textBefore = await page.innerText('body')
+
     // Fill Account A = GiftedForge, Account B = user handle
-    // The page labels inputs "Account A" and "Account B"
     const inputs = page.locator('input[type="text"]')
     await inputs.nth(0).fill('GiftedForge')
     await inputs.nth(1).fill(cleanHandle)
 
+    // Start intercepting responses only AFTER filling the form
+    page.on('response', async (response) => {
+      try {
+        const ct = response.headers()['content-type'] || ''
+        if (ct.includes('application/json')) {
+          const body = await response.json().catch(() => null)
+          if (body && typeof body.follow === 'boolean') interceptedResult = body
+        }
+      } catch { /* ignore */ }
+    })
+
     // Click the check button
     await page.getByRole('button', { name: /check/i }).click()
 
-    // Wait for the result — either network interception or DOM change
-    // Give the page up to 12s to respond
+    // Wait for the DOM to change from its pre-click state (up to 12s)
     await page.waitForFunction(
-      () => document.body.innerText.includes('true') || document.body.innerText.includes('false'),
+      (before) => document.body.innerText !== before,
+      textBefore,
       { timeout: 12000 },
-    ).catch(() => { /* timed out — fall through to DOM parse */ })
+    ).catch(() => {})
 
     // Prefer intercepted API JSON (most reliable)
     if (interceptedResult !== null) {
+      console.log(`[follow-check] @${cleanHandle} intercepted:`, interceptedResult)
       return { follows: interceptedResult.follow === true, protected: interceptedResult.user_protected === true }
     }
 
-    // DOM fallback: look for "follow": true/false pattern in rendered page text
-    const text = await page.innerText('body')
-    const match = text.match(/"follow"\s*:\s*(true|false)/i) || text.match(/follow[^:]*:\s*(true|false)/i)
+    // DOM fallback: diff the page text — only look at NEW content added after clicking
+    const textAfter = await page.innerText('body')
+    console.log(`[follow-check] @${cleanHandle} DOM before: ${textBefore.slice(0, 200)}`)
+    console.log(`[follow-check] @${cleanHandle} DOM after:  ${textAfter.slice(0, 200)}`)
+
+    // Only search the new portion of the text for "follow": true/false
+    const newText = textAfter.replace(textBefore, '')
+    const match = newText.match(/"follow"\s*:\s*(true|false)/i)
     if (match) {
       return { follows: match[1] === 'true', protected: false }
     }
 
-    throw new Error('Could not read follow status from page')
+    // Last resort: look anywhere in updated text for the strict JSON pattern
+    const strictMatch = textAfter.match(/"follow"\s*:\s*(true|false)/i)
+    if (strictMatch) {
+      return { follows: strictMatch[1] === 'true', protected: false }
+    }
+
+    throw new Error(`Could not determine follow status for @${cleanHandle}`)
   } finally {
     await browser.close()
   }
