@@ -3751,11 +3751,24 @@ async function checkXFollowViaSorsa(handle) {
       return false
     }, { timeout: 20000 })
 
-    // Account A = user handle, Account B = GiftedForge
-    // follow: true means Account A follows Account B (user follows GiftedForge)
-    const inputs = page.locator('input[type="text"]')
-    await inputs.nth(0).fill(cleanHandle)
-    await inputs.nth(1).fill('GiftedForge')
+    // Use the native HTMLInputElement value setter so React's controlled state
+    // actually updates — plain fill() sets the DOM value but React reads its
+    // own virtual state, which can lag and cause a stale submit.
+    await page.evaluate(([handle, target]) => {
+      const ins = document.querySelectorAll('input[type="text"]')
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+      setter.call(ins[0], handle)
+      ins[0].dispatchEvent(new Event('input', { bubbles: true }))
+      setter.call(ins[1], target)
+      ins[1].dispatchEvent(new Event('input', { bubbles: true }))
+    }, [cleanHandle, 'GiftedForge'])
+
+    // Log what actually gets submitted so we can verify the values are correct
+    page.on('request', (req) => {
+      if (req.url().includes('check-follow') && req.method() === 'POST') {
+        console.log(`[follow-check] POST body for @${cleanHandle}:`, req.postData())
+      }
+    })
 
     // Listen for the API response BEFORE clicking
     const resultPromise = page
