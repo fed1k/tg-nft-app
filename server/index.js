@@ -2832,6 +2832,26 @@ app.post('/api/telegram/webhook', async (req, res) => {
     return res.json({ ok: true })
   }
 
+  // Wallet verification: user opened bot via ?start=wallet_{sessionId}
+  if (msg?.text?.startsWith('/start wallet_')) {
+    const sessionId = msg.text.slice('/start wallet_'.length).trim()
+    const userId = msg.from?.id
+    const chatId = msg.chat.id
+    walletVerifySessions.set(sessionId, { userId, createdAt: Date.now() })
+    await tgApi('sendMessage', {
+      chat_id: chatId,
+      parse_mode: 'HTML',
+      text:
+        '👛 <b>Connect your TON wallet</b>\n\n' +
+        'Open the GiftedForge mini app, go to <b>Wallet</b>, and connect your TON wallet.\n\n' +
+        'Once connected, return to the website — we\'ll detect it automatically.',
+      reply_markup: {
+        inline_keyboard: [[{ text: '🚀 Open Mini App', web_app: { url: GIFTEDFORGE_FRONTEND_ORIGIN } }]],
+      },
+    })
+    return res.json({ ok: true })
+  }
+
   // Step 2: user forwards a message from @Giftedforge — that proves membership
   if (msg?.forward_from_chat) {
     const userId = msg.from?.id
@@ -3956,6 +3976,34 @@ app.post('/api/waitlist/codes/validate', async (req, res) => {
   if (existing.used) return res.json({ valid: false, reason: 'already_used' })
   if (existing.expiresAt && existing.expiresAt <= now) return res.json({ valid: false, reason: 'expired' })
   return res.json({ valid: false, reason: 'invalid' })
+})
+
+/** In-memory store for TON wallet connection verification sessions.
+ *  sessionId → { userId (telegramId), createdAt } */
+const walletVerifySessions = new Map()
+
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000
+  for (const [id, s] of walletVerifySessions) {
+    if (s.createdAt < cutoff) walletVerifySessions.delete(id)
+  }
+}, 60_000)
+
+/** Public: poll status of a TON wallet connection verification session. */
+app.get('/api/waitlist/verify/wallet', async (req, res) => {
+  const sessionId = String(req.query.session_id || '').trim()
+  if (!sessionId) return res.status(400).json({ message: 'session_id required' })
+  const session = walletVerifySessions.get(sessionId)
+  if (!session) return res.json({ status: 'pending' })
+  const user = await AdminUser.findOne({
+    telegramId: session.userId,
+    walletAddress: { $exists: true, $nin: [null, ''] },
+  }).lean()
+  if (user) {
+    walletVerifySessions.delete(sessionId)
+    return res.json({ status: 'verified' })
+  }
+  return res.json({ status: 'waiting' })
 })
 
 /** In-memory store for Telegram channel membership verification sessions.
