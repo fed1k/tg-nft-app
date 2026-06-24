@@ -2838,17 +2838,30 @@ app.post('/api/telegram/webhook', async (req, res) => {
     const userId = msg.from?.id
     const chatId = msg.chat.id
     walletVerifySessions.set(sessionId, { userId, createdAt: Date.now() })
-    await tgApi('sendMessage', {
-      chat_id: chatId,
-      parse_mode: 'HTML',
-      text:
-        '👛 <b>Connect your TON wallet</b>\n\n' +
-        'Open the GiftedForge mini app, go to <b>Wallet</b>, and connect your TON wallet.\n\n' +
-        'Once connected, return to the website — we\'ll detect it automatically.',
-      reply_markup: {
-        inline_keyboard: [[{ text: '🚀 Open Mini App', web_app: { url: GIFTEDFORGE_FRONTEND_ORIGIN } }]],
-      },
-    })
+
+    const existingUser = await AdminUser.findOne({
+      telegramId: userId,
+      walletAddress: { $exists: true, $nin: [null, ''] },
+    }).lean()
+
+    if (existingUser) {
+      await tgApi('sendMessage', {
+        chat_id: chatId,
+        text: '✅ Your TON wallet is already connected! Return to the GiftedForge website — this step will complete automatically.',
+      })
+    } else {
+      await tgApi('sendMessage', {
+        chat_id: chatId,
+        parse_mode: 'HTML',
+        text:
+          '👛 <b>Connect your TON wallet</b>\n\n' +
+          'Open the GiftedForge mini app, go to <b>Wallet</b>, and connect your TON wallet.\n\n' +
+          'Once connected, return to the website — we\'ll detect it automatically.',
+        reply_markup: {
+          inline_keyboard: [[{ text: '🚀 Open Mini App', web_app: { url: GIFTEDFORGE_FRONTEND_ORIGIN } }]],
+        },
+      })
+    }
     return res.json({ ok: true })
   }
 
