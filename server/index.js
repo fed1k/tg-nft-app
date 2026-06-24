@@ -2811,6 +2811,60 @@ app.post('/api/telegram/webhook', async (req, res) => {
 
   const msg = update?.message || update?.edited_message
   
+  // ── Telegram channel membership verification ──────────────────────────────
+  // Step 1: user opened bot via ?start=gf_{sessionId} link from the website
+  if (msg?.text?.startsWith('/start gf_')) {
+    const sessionId = msg.text.slice('/start gf_'.length).trim()
+    const userId = msg.from?.id
+    const chatId = msg.chat.id
+    tgVerifySessions.set(sessionId, { userId, chatId, status: 'waiting', createdAt: Date.now() })
+    tgUserToSession.set(userId, sessionId)
+    await tgApi('sendMessage', {
+      chat_id: chatId,
+      parse_mode: 'HTML',
+      text:
+        '👋 <b>Almost there!</b>\n\n' +
+        'To verify you\'ve joined <a href="https://t.me/Giftedforge">@Giftedforge</a>:\n\n' +
+        '1️⃣ Open the <a href="https://t.me/Giftedforge">@Giftedforge</a> channel\n' +
+        '2️⃣ Forward any message from it to <b>this chat</b>\n\n' +
+        "We'll verify instantly ✨",
+    })
+    return res.json({ ok: true })
+  }
+
+  // Step 2: user forwards a message from @Giftedforge — that proves membership
+  if (msg?.forward_from_chat) {
+    const userId = msg.from?.id
+    const chatId = msg.chat.id
+    const fromUsername = msg.forward_from_chat.username?.toLowerCase()
+
+    if (fromUsername === 'giftedforge') {
+      const sessionId = tgUserToSession.get(userId)
+      const session = sessionId ? tgVerifySessions.get(sessionId) : null
+      if (session && session.status === 'waiting') {
+        session.status = 'verified'
+        await tgApi('sendMessage', {
+          chat_id: chatId,
+          parse_mode: 'HTML',
+          text: '✅ <b>Verified!</b> You\'ve joined @Giftedforge.\n\nReturn to the GiftedForge website to complete this step.',
+        })
+      } else {
+        await tgApi('sendMessage', {
+          chat_id: chatId,
+          text: '⚠️ No active verification session. Please start from the GiftedForge website.',
+        })
+      }
+    } else {
+      await tgApi('sendMessage', {
+        chat_id: chatId,
+        parse_mode: 'HTML',
+        text: '❌ That wasn\'t from @Giftedforge. Please forward a message from the <a href="https://t.me/Giftedforge">@Giftedforge</a> channel.',
+      })
+    }
+    return res.json({ ok: true })
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   if (msg?.text && !msg.successful_payment) {
     const chatId = msg.chat.id
     try {
@@ -3902,6 +3956,33 @@ app.post('/api/waitlist/codes/validate', async (req, res) => {
   if (existing.used) return res.json({ valid: false, reason: 'already_used' })
   if (existing.expiresAt && existing.expiresAt <= now) return res.json({ valid: false, reason: 'expired' })
   return res.json({ valid: false, reason: 'invalid' })
+})
+
+/** In-memory store for Telegram channel membership verification sessions.
+ *  sessionId → { userId, chatId, status: 'waiting'|'verified', createdAt }
+ *  Expires after 10 minutes. Safe for 2k users — each session is tiny. */
+const tgVerifySessions = new Map()
+const tgUserToSession = new Map() // userId → sessionId (latest)
+
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000
+  for (const [id, s] of tgVerifySessions) {
+    if (s.createdAt < cutoff) { tgUserToSession.delete(s.userId); tgVerifySessions.delete(id) }
+  }
+}, 60_000)
+
+/** Public: poll status of a Telegram membership verification session. */
+app.get('/api/waitlist/verify/telegram', (req, res) => {
+  const sessionId = String(req.query.session_id || '').trim()
+  if (!sessionId) return res.status(400).json({ message: 'session_id required' })
+  const session = tgVerifySessions.get(sessionId)
+  if (!session) return res.json({ status: 'pending' })
+  if (session.status === 'verified') {
+    tgVerifySessions.delete(sessionId)
+    tgUserToSession.delete(session.userId)
+    return res.json({ status: 'verified' })
+  }
+  return res.json({ status: 'waiting' })
 })
 
 /** Public: referral stats for a given email — invited count + activated count. */
