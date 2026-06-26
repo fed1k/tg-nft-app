@@ -11,6 +11,7 @@ import {
   GIFTEDFORGE_FRONTEND_ORIGIN,
   GIFTEDFORGE_API_ORIGIN,
 } from './giftedforgeDeploy.js'
+import { checkEngage } from './engage-checker.js'
 
 const app = express()
 
@@ -3983,6 +3984,27 @@ app.get('/api/waitlist/verify/telegram', (req, res) => {
     return res.json({ status: 'verified' })
   }
   return res.json({ status: 'waiting' })
+})
+
+/** Public: check if a user retweeted/commented on the GiftedForge announcement tweet. */
+app.get('/api/waitlist/verify/engage', async (req, res) => {
+  const username = String(req.query.username || '').trim().replace(/^@/, '')
+  const tweetId  = String(req.query.tweet_id  || '').trim()
+  const sinceDate = String(req.query.since_date || '').trim() || undefined
+
+  if (!username) return res.status(400).json({ error: 'username is required' })
+  if (!tweetId)  return res.status(400).json({ error: 'tweet_id is required' })
+
+  try {
+    const result = await checkEngage(username, tweetId, sinceDate)
+    return res.json(result)
+  } catch (err) {
+    if (err.isRateLimit)        return res.status(429).json({ error: 'rate_limited' })
+    if (err.message?.includes('User not found')) return res.status(404).json({ error: 'user_not_found' })
+    if (err.message?.includes('No X sessions'))  return res.status(503).json({ error: 'checker_not_configured' })
+    console.error('[engage-verify]', err.message || err)
+    return res.status(500).json({ error: 'server_error' })
+  }
 })
 
 /** Public: referral stats for a given email — invited count + activated count. */
