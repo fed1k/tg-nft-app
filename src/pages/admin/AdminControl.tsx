@@ -32,6 +32,7 @@ export default function AdminControl() {
 
   // State
   const [panel, setPanel] = useState<SettingsPanel>(null)
+  const [codeFilter, setCodeFilter] = useState<'all' | 'unused' | 'used'>('all')
   const [adminModal, setAdminModal] = useState(false)
   const [step, setStep] = useState(1)
   const [adminFormError, setAdminFormError] = useState('')
@@ -171,7 +172,6 @@ export default function AdminControl() {
   const [codeCount, setCodeCount] = useState('5')
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([])
   const [copied, setCopied] = useState(false)
-  const [codeFilter, setCodeFilter] = useState<'all' | 'unused' | 'used'>('all')
 
   const openFees = () => {
     setFeeInput(String(settings?.platformFeePercent ?? 2))
