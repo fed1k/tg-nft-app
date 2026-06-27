@@ -3914,8 +3914,9 @@ app.get('/api/admin/waitlist/codes', async (req, res) => {
   const total = await WaitlistCode.countDocuments(query)
   const rows = await WaitlistCode.find(query).sort(parseSortParam(sort)).skip(skip).limit(limit)
   res.set('x-total-count', String(total))
-  res.json(
-    rows.map((c) => ({
+  res.json({
+    total,
+    rows: rows.map((c) => ({
       code: c.code,
       used: c.used,
       usedByEmail: c.usedByEmail || null,
@@ -3923,7 +3924,7 @@ app.get('/api/admin/waitlist/codes', async (req, res) => {
       expiresAt: c.expiresAt || null,
       createdAt: c.createdAt,
     })),
-  )
+  })
 })
 
 /** Admin: revoke (delete) an unused code. */
