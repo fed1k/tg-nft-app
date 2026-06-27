@@ -163,6 +163,20 @@ export const adminClient = {
 
   getNominations: async (weekId?: string) =>
     api<Nomination[]>(`/referrals/nominations${weekId ? `?weekId=${weekId}` : ''}`),
+
+  generateWaitlistCodes: async (count: number, expiresAt?: string) =>
+    api<{ codes: string[]; count: number }>('/waitlist/codes/generate', {
+      method: 'POST',
+      body: JSON.stringify({ count, ...(expiresAt ? { expiresAt } : {}) }),
+    }),
+
+  listWaitlistCodes: async (used?: boolean) =>
+    api<{ total: number; rows: { code: string; used: boolean; createdAt: string }[] }>(
+      `/waitlist/codes${used !== undefined ? `?used=${used}` : ''}`,
+    ),
+
+  deleteWaitlistCode: async (code: string) =>
+    api<{ ok: boolean }>(`/waitlist/codes/${encodeURIComponent(code)}`, { method: 'DELETE' }),
 }
 
 export type AdminClient = typeof adminClient

@@ -96,6 +96,7 @@ export interface PlatformSettings {
   maxUploadMb: number
   tonEnabled: boolean
   maintenanceMode: boolean
+  waitlistMode: boolean
 }
 
 export interface AdminAlertItem {

@@ -16,6 +16,7 @@ type SettingsPanel =
   | 'db'
   | 'locale'
   | 'referrals'
+  | 'waitlist'
   | null
 
 const isLikelyTelegramUsername = (value: string) => /^@[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(value.trim())
@@ -87,6 +88,36 @@ export default function AdminControl() {
     },
   })
 
+  const { data: waitlistStats } = useQuery({
+    queryKey: ['waitlist-codes-stats'],
+    queryFn: () => adminClient.listWaitlistCodes(),
+    enabled: panel === 'waitlist',
+  })
+
+  const { data: waitlistUnused } = useQuery({
+    queryKey: ['waitlist-codes-unused'],
+    queryFn: () => adminClient.listWaitlistCodes(false),
+    enabled: panel === 'waitlist',
+  })
+
+  const generateCodesMut = useMutation({
+    mutationFn: ({ count }: { count: number }) => adminClient.generateWaitlistCodes(count),
+    onSuccess: (data) => {
+      setGeneratedCodes(data.codes)
+      setCopied(false)
+      qc.invalidateQueries({ queryKey: ['waitlist-codes-stats'] })
+      qc.invalidateQueries({ queryKey: ['waitlist-codes-unused'] })
+    },
+  })
+
+  const deleteCodeMut = useMutation({
+    mutationFn: (code: string) => adminClient.deleteWaitlistCode(code),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['waitlist-codes-stats'] })
+      qc.invalidateQueries({ queryKey: ['waitlist-codes-unused'] })
+    },
+  })
+
   const addMut = useMutation({
     mutationFn: adminClient.addStaffMember,
     onSuccess: () => {
@@ -121,6 +152,9 @@ export default function AdminControl() {
   const [feeReceiverInput, setFeeReceiverInput] = useState('')
   const [collectionAddrInput, setCollectionAddrInput] = useState('')
   const [uploadInput, setUploadInput] = useState('')
+  const [codeCount, setCodeCount] = useState('5')
+  const [generatedCodes, setGeneratedCodes] = useState<string[]>([])
+  const [copied, setCopied] = useState(false)
 
   const openFees = () => {
     setFeeInput(String(settings?.platformFeePercent ?? 2))
@@ -207,7 +241,7 @@ export default function AdminControl() {
         <Row
           icon="/taggray.svg"
           title="Security"
-          subtitle="Sessions and admin access controls"
+          subtitle={`Sessions and access controls · Waitlist ${(settings?.waitlistMode ?? true) ? 'ON' : 'OFF'}`}
           onClick={() => setPanel('security')}
         />
       </Section>
@@ -217,13 +251,19 @@ export default function AdminControl() {
           icon="/profile-2user.svg"
           title="Referral Competition"
           subtitle="Nominate top 3 weekly inviters"
-          onClick={() => setPanel('referrals')}
+          onClick={() => setPanel(‘referrals’)}
+        />
+        <Row
+          icon="/taggray.svg"
+          title="Waitlist Codes"
+          subtitle={waitlistStats ? `${waitlistStats.total} total · ${(waitlistStats.total - (waitlistUnused?.total ?? 0))} used` : ‘Generate & manage activation codes’}
+          onClick={() => { setGeneratedCodes([]); setCopied(false); setPanel(‘waitlist’) }}
         />
         <Row
           icon="/taggray.svg"
           title="Report’s"
           subtitle="User reports and disputed items · queue in backend"
-          onClick={() => setPanel('reports')}
+          onClick={() => setPanel(‘reports’)}
         />
       </Section>
 
@@ -441,6 +481,36 @@ export default function AdminControl() {
 
       <Modal isOpen={panel === 'security'} onClose={() => setPanel(null)}>
         <p className="font-semibold text-[#0E0636] text-lg pb-2">Security & sessions</p>
+
+        <div className="border border-[#666F8B22] rounded-xl p-4 mb-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-[#0E0636]">Waitlist mode</p>
+              <p className="text-[11px] text-[#666F8B] mt-0.5 leading-snug">
+                New users must enter an activation code to access the app. Existing users are unaffected.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => patchMut.mutate({ waitlistMode: !(settings?.waitlistMode ?? true) })}
+              className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${
+                (settings?.waitlistMode ?? true) ? 'bg-[#6B6AFD]' : 'bg-[#666F8B33]'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  (settings?.waitlistMode ?? true) ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+          {(settings?.waitlistMode ?? true) && (
+            <p className="text-[11px] text-[#6B6AFD] mt-3 font-medium">
+              Waitlist mode is ON — new users need a code to enter
+            </p>
+          )}
+        </div>
+
         <label className="flex items-center gap-2 text-sm text-[#0E0636] pb-6">
           <input
             type="checkbox"
@@ -514,6 +584,94 @@ export default function AdminControl() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal isOpen={panel === 'waitlist'} onClose={() => setPanel(null)}>
+        <p className="font-semibold text-[#0E0636] text-lg pb-1">Waitlist Codes</p>
+        <p className="text-xs text-[#666F8B] pb-4">
+          {waitlistStats
+            ? `${waitlistStats.total} total · ${waitlistUnused?.total ?? 0} unused · ${waitlistStats.total - (waitlistUnused?.total ?? 0)} used`
+            : 'Loading…'}
+        </p>
+
+        {/* Generate */}
+        <div className="flex gap-2 items-center mb-4">
+          <input
+            type="number"
+            min="1"
+            max="100"
+            value={codeCount}
+            onChange={(e) => setCodeCount(e.target.value)}
+            className="border border-[#666F8B33] rounded-lg py-2 px-3 w-24 text-sm outline-none"
+            placeholder="Count"
+          />
+          <button
+            type="button"
+            disabled={generateCodesMut.isPending}
+            onClick={() => {
+              const n = Math.min(100, Math.max(1, parseInt(codeCount, 10) || 1))
+              generateCodesMut.mutate({ count: n })
+            }}
+            className="flex-1 rounded-lg bg-[#6B6AFD] text-white py-2 text-sm font-semibold disabled:opacity-50 cursor-pointer"
+          >
+            {generateCodesMut.isPending ? 'Generating…' : 'Generate'}
+          </button>
+        </div>
+
+        {/* Generated codes output */}
+        {generatedCodes.length > 0 && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-[#0E0636]">Generated ({generatedCodes.length})</p>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(generatedCodes.join('\n'))
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                }}
+                className="text-xs text-[#6B6AFD] font-medium cursor-pointer"
+              >
+                {copied ? 'Copied!' : 'Copy all'}
+              </button>
+            </div>
+            <div className="bg-[#F5F7FB] rounded-xl p-3 max-h-48 overflow-y-auto space-y-1.5">
+              {generatedCodes.map((code) => (
+                <p key={code} className="text-xs font-mono text-[#0E0636] tracking-wider">{code}</p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Unused codes list */}
+        {(waitlistUnused?.rows ?? []).length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-[#0E0636] mb-2">Unused codes</p>
+            <div className="max-h-48 overflow-y-auto space-y-1.5">
+              {(waitlistUnused?.rows ?? []).map((row) => (
+                <div key={row.code} className="flex items-center justify-between gap-2 bg-[#F5F7FB] rounded-lg px-3 py-1.5">
+                  <p className="text-xs font-mono text-[#0E0636] tracking-wider">{row.code}</p>
+                  <button
+                    type="button"
+                    disabled={deleteCodeMut.isPending}
+                    onClick={() => deleteCodeMut.mutate(row.code)}
+                    className="text-[10px] text-[#DA0909] border border-[#DA0909] rounded px-2 py-0.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="w-full mt-5 rounded-lg bg-black text-white py-2.5 text-sm font-semibold cursor-pointer"
+          onClick={() => setPanel(null)}
+        >
+          Done
+        </button>
       </Modal>
 
       <Modal isOpen={panel === 'reports' || panel === 'db' || panel === 'locale'} onClose={() => setPanel(null)}>

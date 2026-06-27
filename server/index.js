@@ -241,6 +241,7 @@ const settingsSchema = new mongoose.Schema(
     maxUploadMb: { type: Number, default: 500 },
     tonEnabled: { type: Boolean, default: true },
     maintenanceMode: { type: Boolean, default: false },
+    waitlistMode: { type: Boolean, default: true },
   },
   commonOpts,
 )
@@ -324,6 +325,7 @@ const waitlistCodeSchema = new mongoose.Schema(
     code: { type: String, required: true, unique: true, index: true, trim: true, uppercase: true },
     used: { type: Boolean, default: false, index: true },
     usedByEmail: { type: String, trim: true },
+    usedByTelegramId: { type: Number },
     usedAt: { type: Date },
     generatedByTelegramId: { type: Number },
     referredByEmail: { type: String, trim: true }, // set when auto-generated as a user referral reward
@@ -1753,6 +1755,7 @@ app.get('/api/admin/settings', async (_req, res) => {
     maxUploadMb: settings.maxUploadMb,
     tonEnabled: settings.tonEnabled,
     maintenanceMode: settings.maintenanceMode,
+    waitlistMode: settings.waitlistMode ?? true,
   })
 })
 
@@ -1760,7 +1763,7 @@ app.patch('/api/admin/settings', async (req, res) => {
   let settings = await AdminSettings.findOne()
   if (!settings) settings = await AdminSettings.create({})
 
-  const allowed = ['platformFeePercent', 'feeReceiverWalletAddress', 'collectionAddress', 'maxUploadMb', 'tonEnabled', 'maintenanceMode']
+  const allowed = ['platformFeePercent', 'feeReceiverWalletAddress', 'collectionAddress', 'maxUploadMb', 'tonEnabled', 'maintenanceMode', 'waitlistMode']
   const patch = {}
   for (const key of allowed) {
     if (key in req.body) patch[key] = req.body[key]
@@ -1783,6 +1786,7 @@ app.patch('/api/admin/settings', async (req, res) => {
     maxUploadMb: settings.maxUploadMb,
     tonEnabled: settings.tonEnabled,
     maintenanceMode: settings.maintenanceMode,
+    waitlistMode: settings.waitlistMode ?? true,
   })
 })
 
@@ -3023,6 +3027,30 @@ app.post('/api/user/session', async (req, res) => {
       `[${req._rid}] user-session upsert existing id=${existing._id} tg=${hasTg ? tgId : 'none'} wallet=${normalizedWallet || 'none'}`,
     )
     return res.json({ ok: true, user: toAdminUser(existing) })
+  }
+
+  // New user — enforce waitlist gate if waitlistMode is on
+  {
+    const settings = await AdminSettings.findOne()
+    if (settings?.waitlistMode) {
+      const rawCode = String(req.body.activationCode || '').trim().toUpperCase()
+      if (!rawCode) {
+        return res.status(403).json({ code: 'WAITLIST_MODE', message: 'GiftedForge is currently invite-only. Enter your activation code to get access.' })
+      }
+      const now = new Date()
+      const codeDoc = await WaitlistCode.findOneAndUpdate(
+        {
+          code: rawCode,
+          used: false,
+          $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: now } }],
+        },
+        { $set: { used: true, usedAt: now, ...(hasTg ? { usedByTelegramId: tgId } : {}) } },
+        { new: true },
+      )
+      if (!codeDoc) {
+        return res.status(403).json({ code: 'INVALID_CODE', message: 'Invalid or already used activation code.' })
+      }
+    }
   }
 
   const created = await AdminUser.create({

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
-import { userClient, isAccountBlockedError } from '../services/user';
+import { userClient, isAccountBlockedError, UserApiError } from '../services/user';
 
 interface TelegramUser {
   id: number;
@@ -74,7 +74,7 @@ export interface TelegramWebApp {
   setBackgroundColor: (color: string) => void;
 }
 
-export type AccountAccessState = 'loading' | 'allowed' | 'blocked'
+export type AccountAccessState = 'loading' | 'allowed' | 'blocked' | 'waitlist_locked'
 
 interface TelegramContextValue {
   user: TelegramUser | null;
@@ -89,6 +89,10 @@ interface TelegramContextValue {
   verifyAccountAccess: () => Promise<boolean>;
   /** Called when any API reports USER_BANNED / USER_SUSPENDED */
   reportAccessBlock: (err: unknown) => void;
+  /** Attempt to unlock waitlist gate with an activation code. Returns ok or error key. */
+  activateWithCode: (code: string) => Promise<{ ok: boolean; error?: 'invalid_code' | 'network_error' | 'blocked' }>;
+  /** Set when activation code was rejected */
+  activationCodeError: string | null;
 }
 
 const TelegramContext = createContext<TelegramContextValue>({
@@ -101,6 +105,8 @@ const TelegramContext = createContext<TelegramContextValue>({
   blockStatus: null,
   verifyAccountAccess: async () => true,
   reportAccessBlock: () => {},
+  activateWithCode: async () => ({ ok: false, error: 'network_error' }),
+  activationCodeError: null,
 });
 
 async function syncUserSession(user: TelegramUser, startParam?: string): Promise<void> {
@@ -123,6 +129,7 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
   const [accessState, setAccessState] = useState<AccountAccessState>('loading');
   const [blockMessage, setBlockMessage] = useState<string | null>(null);
   const [blockStatus, setBlockStatus] = useState<'Banned' | 'Suspended' | null>(null);
+  const [activationCodeError, setActivationCodeError] = useState<string | null>(null);
 
   const applyBlockFromError = useCallback((err: unknown) => {
     if (isAccountBlockedError(err)) {
@@ -153,9 +160,42 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
       setBlockStatus(null);
       return true;
     } catch (err) {
+      if (err instanceof UserApiError && err.code === 'WAITLIST_MODE') {
+        setAccessState('waitlist_locked');
+        return false;
+      }
       if (applyBlockFromError(err)) return false;
       setAccessState('allowed');
       return true;
+    }
+  }, [user, webApp?.initDataUnsafe?.start_param, applyBlockFromError]);
+
+  const activateWithCode = useCallback(async (code: string): Promise<{ ok: boolean; error?: 'invalid_code' | 'network_error' | 'blocked' }> => {
+    if (!user?.id) return { ok: false, error: 'network_error' };
+    setActivationCodeError(null);
+    try {
+      await userClient.syncSession({
+        telegramId: user.id,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        username: user.username,
+        photoUrl: user.photo_url,
+        languageCode: user.language_code,
+        referralCode: webApp?.initDataUnsafe?.start_param,
+        activationCode: code.trim().toUpperCase(),
+      });
+      setAccessState('allowed');
+      setBlockMessage(null);
+      setBlockStatus(null);
+      return { ok: true };
+    } catch (err) {
+      if (err instanceof UserApiError && err.code === 'INVALID_CODE') {
+        setActivationCodeError('Invalid or already used code. Please check and try again.');
+        return { ok: false, error: 'invalid_code' };
+      }
+      if (applyBlockFromError(err)) return { ok: false, error: 'blocked' };
+      setActivationCodeError('Connection failed. Check your internet and try again.');
+      return { ok: false, error: 'network_error' };
     }
   }, [user, webApp?.initDataUnsafe?.start_param, applyBlockFromError]);
 
@@ -211,6 +251,10 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
             setBlockStatus(null);
           })
           .catch((err) => {
+            if (err instanceof UserApiError && err.code === 'WAITLIST_MODE') {
+              setAccessState('waitlist_locked');
+              return;
+            }
             if (!applyBlockFromError(err)) {
               console.warn('user-session-sync-failed', err);
               setAccessState('allowed');
@@ -241,6 +285,8 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
         blockStatus,
         verifyAccountAccess,
         reportAccessBlock,
+        activateWithCode,
+        activationCodeError,
       }}
     >
       {children}

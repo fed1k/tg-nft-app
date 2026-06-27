@@ -272,6 +272,7 @@ export const userClient = {
     referralCode?: string
     walletAddress?: string
     walletType?: 'TON' | 'EVM'
+    activationCode?: string
   }) =>
     api<{ ok: boolean; user: unknown }>(`/session`, {
       method: 'POST',
