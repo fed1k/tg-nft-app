@@ -88,34 +88,50 @@ export default function AdminControl() {
     },
   })
 
-  const { data: waitlistStats } = useQuery({
-    queryKey: ['waitlist-codes-stats'],
+  const { data: waitlistAll } = useQuery({
+    queryKey: ['waitlist-codes-all'],
     queryFn: () => adminClient.listWaitlistCodes(),
     enabled: panel === 'waitlist',
   })
 
-  const { data: waitlistUnused } = useQuery({
-    queryKey: ['waitlist-codes-unused'],
-    queryFn: () => adminClient.listWaitlistCodes(false),
+  const { data: waitlistUsedCount } = useQuery({
+    queryKey: ['waitlist-codes-used-count'],
+    queryFn: () => adminClient.listWaitlistCodes(true),
     enabled: panel === 'waitlist',
   })
+
+  const waitlistTotal = waitlistAll?.total ?? 0
+  const waitlistUsed = waitlistUsedCount?.total ?? 0
+  const waitlistUnusedCount = waitlistTotal - waitlistUsed
+
+  const { data: waitlistCodes, isFetching: waitlistFetching } = useQuery({
+    queryKey: ['waitlist-codes-list', codeFilter],
+    queryFn: () =>
+      adminClient.listWaitlistCodes(
+        codeFilter === 'all' ? undefined : codeFilter === 'unused' ? false : true,
+      ),
+    enabled: panel === 'waitlist',
+  })
+
+  const invalidateWaitlist = () => {
+    qc.invalidateQueries({ queryKey: ['waitlist-codes-all'] })
+    qc.invalidateQueries({ queryKey: ['waitlist-codes-used-count'] })
+    qc.invalidateQueries({ queryKey: ['waitlist-codes-list'] })
+  }
 
   const generateCodesMut = useMutation({
     mutationFn: ({ count }: { count: number }) => adminClient.generateWaitlistCodes(count),
     onSuccess: (data) => {
       setGeneratedCodes(data.codes)
       setCopied(false)
-      qc.invalidateQueries({ queryKey: ['waitlist-codes-stats'] })
-      qc.invalidateQueries({ queryKey: ['waitlist-codes-unused'] })
+      setCodeFilter('unused')
+      invalidateWaitlist()
     },
   })
 
   const deleteCodeMut = useMutation({
     mutationFn: (code: string) => adminClient.deleteWaitlistCode(code),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['waitlist-codes-stats'] })
-      qc.invalidateQueries({ queryKey: ['waitlist-codes-unused'] })
-    },
+    onSuccess: invalidateWaitlist,
   })
 
   const addMut = useMutation({
@@ -155,6 +171,7 @@ export default function AdminControl() {
   const [codeCount, setCodeCount] = useState('5')
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([])
   const [copied, setCopied] = useState(false)
+  const [codeFilter, setCodeFilter] = useState<'all' | 'unused' | 'used'>('all')
 
   const openFees = () => {
     setFeeInput(String(settings?.platformFeePercent ?? 2))
@@ -256,10 +273,11 @@ export default function AdminControl() {
         <Row
           icon="/taggray.svg"
           title="Waitlist Codes"
-          subtitle={waitlistStats ? `${waitlistStats.total} total · ${(waitlistStats.total - (waitlistUnused?.total ?? 0))} used` : 'Generate & manage activation codes'}
+          subtitle={waitlistAll ? `${waitlistTotal} total · ${waitlistUnusedCount} unused · ${waitlistUsed} used` : 'Generate & manage activation codes'}
         onClick={() => {
           setGeneratedCodes([]);
           setCopied(false);
+          setCodeFilter('all');
           setPanel('waitlist')
         }}
         />
@@ -589,21 +607,30 @@ export default function AdminControl() {
 
       <Modal isOpen={panel === 'waitlist'} onClose={() => setPanel(null)}>
         <p className="font-semibold text-[#0E0636] text-lg pb-1">Waitlist Codes</p>
-        <p className="text-xs text-[#666F8B] pb-4">
-          {waitlistStats
-            ? `${waitlistStats.total} total · ${waitlistUnused?.total ?? 0} unused · ${waitlistStats.total - (waitlistUnused?.total ?? 0)} used`
-            : 'Loading…'}
-        </p>
 
-        {/* Generate */}
-        <div className="flex gap-2 items-center mb-4">
+        {/* Stats row */}
+        <div className="flex gap-3 mb-4">
+          {[
+            { label: 'Total', value: waitlistAll ? waitlistTotal : '—' },
+            { label: 'Unused', value: waitlistAll ? waitlistUnusedCount : '—' },
+            { label: 'Used', value: waitlistUsedCount ? waitlistUsed : '—' },
+          ].map(({ label, value }) => (
+            <div key={label} className="flex-1 bg-[#F5F7FB] rounded-xl py-2 text-center">
+              <p className="text-sm font-bold text-[#0E0636]">{value}</p>
+              <p className="text-[10px] text-[#666F8B] mt-0.5">{label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Generate row */}
+        <div className="flex gap-2 items-center mb-3">
           <input
             type="number"
             min="1"
             max="100"
             value={codeCount}
             onChange={(e) => setCodeCount(e.target.value)}
-            className="border border-[#666F8B33] rounded-lg py-2 px-3 w-24 text-sm outline-none"
+            className="border border-[#666F8B33] rounded-lg py-2 px-3 w-20 text-sm outline-none"
             placeholder="Count"
           />
           <button
@@ -615,60 +642,89 @@ export default function AdminControl() {
             }}
             className="flex-1 rounded-lg bg-[#6B6AFD] text-white py-2 text-sm font-semibold disabled:opacity-50 cursor-pointer"
           >
-            {generateCodesMut.isPending ? 'Generating…' : 'Generate'}
+            {generateCodesMut.isPending ? 'Generating…' : 'Generate codes'}
           </button>
         </div>
 
-        {/* Generated codes output */}
+        {/* Copy banner for freshly generated codes */}
         {generatedCodes.length > 0 && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-[#0E0636]">Generated ({generatedCodes.length})</p>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(generatedCodes.join('\n'))
-                  setCopied(true)
-                  setTimeout(() => setCopied(false), 2000)
-                }}
-                className="text-xs text-[#6B6AFD] font-medium cursor-pointer"
-              >
-                {copied ? 'Copied!' : 'Copy all'}
-              </button>
-            </div>
-            <div className="bg-[#F5F7FB] rounded-xl p-3 max-h-48 overflow-y-auto space-y-1.5">
-              {generatedCodes.map((code) => (
-                <p key={code} className="text-xs font-mono text-[#0E0636] tracking-wider">{code}</p>
-              ))}
-            </div>
+          <div className="flex items-center justify-between bg-[#6B6AFD0F] border border-[#6B6AFD33] rounded-xl px-3 py-2 mb-3">
+            <p className="text-xs text-[#6B6AFD] font-medium">{generatedCodes.length} new code{generatedCodes.length !== 1 ? 's' : ''} generated</p>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(generatedCodes.join('\n'))
+                setCopied(true)
+                setTimeout(() => setCopied(false), 2000)
+              }}
+              className="text-xs text-[#6B6AFD] font-semibold cursor-pointer"
+            >
+              {copied ? 'Copied!' : 'Copy all'}
+            </button>
           </div>
         )}
 
-        {/* Unused codes list */}
-        {(waitlistUnused?.rows ?? []).length > 0 && (
-          <div>
-            <p className="text-xs font-medium text-[#0E0636] mb-2">Unused codes</p>
-            <div className="max-h-48 overflow-y-auto space-y-1.5">
-              {(waitlistUnused?.rows ?? []).map((row) => (
-                <div key={row.code} className="flex items-center justify-between gap-2 bg-[#F5F7FB] rounded-lg px-3 py-1.5">
-                  <p className="text-xs font-mono text-[#0E0636] tracking-wider">{row.code}</p>
-                  <button
-                    type="button"
-                    disabled={deleteCodeMut.isPending}
-                    onClick={() => deleteCodeMut.mutate(row.code)}
-                    className="text-[10px] text-[#DA0909] border border-[#DA0909] rounded px-2 py-0.5 disabled:opacity-50 cursor-pointer"
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
+        {/* Filter tabs */}
+        <div className="flex rounded-xl bg-[#F5F7FB] p-1 mb-3">
+          {(['all', 'unused', 'used'] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setCodeFilter(f)}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                codeFilter === f ? 'bg-white text-[#0E0636] shadow-sm' : 'text-[#666F8B]'
+              }`}
+            >
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Code list */}
+        <div className="max-h-60 overflow-y-auto space-y-1.5">
+          {waitlistFetching && (waitlistCodes?.rows ?? []).length === 0 && (
+            <p className="text-xs text-[#666F8B] text-center py-4">Loading…</p>
+          )}
+          {!waitlistFetching && (waitlistCodes?.rows ?? []).length === 0 && (
+            <p className="text-xs text-[#666F8B] text-center py-4">No codes found.</p>
+          )}
+          {(waitlistCodes?.rows ?? []).map((row) => (
+            <div
+              key={row.code}
+              className="flex items-center justify-between gap-2 bg-[#F5F7FB] rounded-lg px-3 py-2"
+            >
+              <p className="text-xs font-mono text-[#0E0636] tracking-wider flex-1">{row.code}</p>
+              <span
+                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
+                  row.used
+                    ? 'bg-[#666F8B1A] text-[#666F8B]'
+                    : 'bg-[#6B6AFD1A] text-[#6B6AFD]'
+                }`}
+              >
+                {row.used ? 'Used' : 'Unused'}
+              </span>
+              {!row.used && (
+                <button
+                  type="button"
+                  disabled={deleteCodeMut.isPending}
+                  onClick={() => deleteCodeMut.mutate(row.code)}
+                  className="text-[10px] text-[#DA0909] border border-[#DA090933] rounded px-2 py-0.5 disabled:opacity-50 cursor-pointer shrink-0"
+                >
+                  Delete
+                </button>
+              )}
             </div>
-          </div>
-        )}
+          ))}
+          {(waitlistCodes?.total ?? 0) > (waitlistCodes?.rows ?? []).length && (
+            <p className="text-[10px] text-[#666F8B] text-center pt-1">
+              Showing {(waitlistCodes?.rows ?? []).length} of {waitlistCodes?.total} — scroll or increase page size in API
+            </p>
+          )}
+        </div>
 
         <button
           type="button"
-          className="w-full mt-5 rounded-lg bg-black text-white py-2.5 text-sm font-semibold cursor-pointer"
+          className="w-full mt-4 rounded-lg bg-black text-white py-2.5 text-sm font-semibold cursor-pointer"
           onClick={() => setPanel(null)}
         >
           Done
