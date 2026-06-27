@@ -256,14 +256,18 @@ export default function AdminControl() {
         <Row
           icon="/taggray.svg"
           title="Waitlist Codes"
-          subtitle={waitlistStats ? `${waitlistStats.total} total · ${(waitlistStats.total - (waitlistUnused?.total ?? 0))} used` : ‘Generate & manage activation codes’}
-          onClick={() => { setGeneratedCodes([]); setCopied(false); setPanel(‘waitlist’) }}
+          subtitle={waitlistStats ? `${waitlistStats.total} total · ${(waitlistStats.total - (waitlistUnused?.total ?? 0))} used` : 'Generate & manage activation codes'}
+        onClick={() => {
+          setGeneratedCodes([]);
+          setCopied(false);
+          setPanel('waitlist')
+        }}
         />
         <Row
           icon="/taggray.svg"
           title="Report’s"
           subtitle="User reports and disputed items · queue in backend"
-          onClick={() => setPanel(‘reports’)}
+          onClick={() => setPanel('reports')}
         />
       </Section>
 
@@ -333,11 +337,10 @@ export default function AdminControl() {
                               key={rank}
                               type="button"
                               onClick={() => nominateMut.mutate({ userId: item.userId, rank })}
-                              className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border transition-colors ${
-                                isNominated
+                              className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border transition-colors ${isNominated
                                   ? 'bg-[#6B6AFD] text-white border-[#6B6AFD]'
                                   : 'border-[#666F8B33] text-[#666F8B] hover:bg-[#6B6AFD1A]'
-                              }`}
+                                }`}
                             >
                               {rank}
                             </button>
@@ -493,14 +496,12 @@ export default function AdminControl() {
             <button
               type="button"
               onClick={() => patchMut.mutate({ waitlistMode: !(settings?.waitlistMode ?? true) })}
-              className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${
-                (settings?.waitlistMode ?? true) ? 'bg-[#6B6AFD]' : 'bg-[#666F8B33]'
-              }`}
+              className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${(settings?.waitlistMode ?? true) ? 'bg-[#6B6AFD]' : 'bg-[#666F8B33]'
+                }`}
             >
               <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                  (settings?.waitlistMode ?? true) ? 'translate-x-5' : 'translate-x-0'
-                }`}
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${(settings?.waitlistMode ?? true) ? 'translate-x-5' : 'translate-x-0'
+                  }`}
               />
             </button>
           </div>
