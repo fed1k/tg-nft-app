@@ -115,9 +115,9 @@ export default function AdminControl() {
   })
 
   const invalidateWaitlist = () => {
-    qc.invalidateQueries({ queryKey: ['waitlist-codes-all'] })
-    qc.invalidateQueries({ queryKey: ['waitlist-codes-used-count'] })
-    qc.invalidateQueries({ queryKey: ['waitlist-codes-list'] })
+    qc.invalidateQueries({ queryKey: ['waitlist-codes-all'], refetchType: 'all' })
+    qc.invalidateQueries({ queryKey: ['waitlist-codes-used-count'], refetchType: 'all' })
+    qc.invalidateQueries({ queryKey: ['waitlist-codes-list'], refetchType: 'all' })
   }
 
   const generateCodesMut = useMutation({
@@ -125,7 +125,6 @@ export default function AdminControl() {
     onSuccess: (data) => {
       setGeneratedCodes(data.codes)
       setCopied(false)
-      setCodeFilter('unused')
       invalidateWaitlist()
     },
   })
@@ -605,7 +604,7 @@ export default function AdminControl() {
         )}
       </Modal>
 
-      <Modal isOpen={panel === 'waitlist'} onClose={() => setPanel(null)}>
+      <Modal isOpen={panel === 'waitlist'} onClose={() => { setPanel(null); setGeneratedCodes([]); setCopied(false) }}>
         <p className="font-semibold text-[#0E0636] text-lg pb-1">Waitlist Codes</p>
 
         {/* Stats row */}
