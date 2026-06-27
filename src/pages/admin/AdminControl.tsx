@@ -251,7 +251,7 @@ export default function AdminControl() {
           icon="/profile-2user.svg"
           title="Referral Competition"
           subtitle="Nominate top 3 weekly inviters"
-          onClick={() => setPanel(‘referrals’)}
+          onClick={() => setPanel('referrals')}
         />
         <Row
           icon="/taggray.svg"
