@@ -2816,54 +2816,38 @@ app.post('/api/telegram/webhook', async (req, res) => {
 
   const msg = update?.message || update?.edited_message
   
-  // ── Telegram channel membership verification ──────────────────────────────
-  // Step 1: user opened bot via ?start=gf_{sessionId} link from the website
+  // ── Telegram group membership verification ───────────────────────────────
+  // User clicked "Verify Membership" on the website → opened t.me/bot?start=gf_<sessionId>
   if (msg?.text?.startsWith('/start gf_')) {
     const sessionId = msg.text.slice('/start gf_'.length).trim()
     const userId = msg.from?.id
     const chatId = msg.chat.id
-    tgVerifySessions.set(sessionId, { userId, chatId, status: 'waiting', createdAt: Date.now() })
-    tgUserToSession.set(userId, sessionId)
-    await tgApi('sendMessage', {
-      chat_id: chatId,
-      parse_mode: 'HTML',
-      text:
-        '👋 <b>Almost there!</b>\n\n' +
-        'To verify you\'ve joined <a href="https://t.me/Giftedforge">@Giftedforge</a>:\n\n' +
-        '1️⃣ Open the <a href="https://t.me/Giftedforge">@Giftedforge</a> channel\n' +
-        '2️⃣ Forward any message from it to <b>this chat</b>\n\n' +
-        "We'll verify instantly ✨",
-    })
-    return res.json({ ok: true })
-  }
 
-  // Step 2: user forwards a message from @Giftedforge — that proves membership
-  if (msg?.forward_from_chat) {
-    const userId = msg.from?.id
-    const chatId = msg.chat.id
-    const fromUsername = msg.forward_from_chat.username?.toLowerCase()
+    if (!sessionId || !userId) return res.json({ ok: true })
 
-    if (fromUsername === 'giftedforge') {
-      const sessionId = tgUserToSession.get(userId)
-      const session = sessionId ? tgVerifySessions.get(sessionId) : null
-      if (session && session.status === 'waiting') {
-        session.status = 'verified'
-        await tgApi('sendMessage', {
-          chat_id: chatId,
-          parse_mode: 'HTML',
-          text: '✅ <b>Verified!</b> You\'ve joined @Giftedforge.\n\nReturn to the GiftedForge website to complete this step.',
-        })
-      } else {
-        await tgApi('sendMessage', {
-          chat_id: chatId,
-          text: '⚠️ No active verification session. Please start from the GiftedForge website.',
-        })
-      }
-    } else {
+    // Check membership directly — no forwarding required
+    let isMember = false
+    try {
+      const memberRes = await tgApi('getChatMember', { chat_id: -1004412821147, user_id: userId })
+      const status = memberRes?.status ?? 'left'
+      isMember = ['creator', 'administrator', 'member'].includes(status)
+    } catch (e) {
+      console.error('[telegram-webhook] getChatMember failed', e?.message || e)
+    }
+
+    if (isMember) {
+      tgVerifySessions.set(sessionId, { userId, chatId, status: 'verified', createdAt: Date.now() })
       await tgApi('sendMessage', {
         chat_id: chatId,
         parse_mode: 'HTML',
-        text: '❌ That wasn\'t from @Giftedforge. Please forward a message from the <a href="https://t.me/Giftedforge">@Giftedforge</a> channel.',
+        text: '✅ <b>Verified!</b> You\'re a member of the GiftedForge community.\n\nReturn to the website to continue.',
+      })
+    } else {
+      tgVerifySessions.set(sessionId, { userId, chatId, status: 'not_member', createdAt: Date.now() })
+      await tgApi('sendMessage', {
+        chat_id: chatId,
+        parse_mode: 'HTML',
+        text: '❌ <b>Not a member yet.</b>\n\nJoin our group first: <a href="https://t.me/+k-pMmANm6dxhYTZi">GiftedForge Community</a>\n\nThen click "Verify Membership" again on the website.',
       })
     }
     return res.json({ ok: true })
@@ -4009,10 +3993,13 @@ app.get('/api/waitlist/verify/telegram', (req, res) => {
   if (!session) return res.json({ status: 'pending' })
   if (session.status === 'verified') {
     tgVerifySessions.delete(sessionId)
-    tgUserToSession.delete(session.userId)
     return res.json({ status: 'verified' })
   }
-  return res.json({ status: 'waiting' })
+  if (session.status === 'not_member') {
+    tgVerifySessions.delete(sessionId)
+    return res.json({ status: 'not_member' })
+  }
+  return res.json({ status: 'pending' })
 })
 
 /** Public: check if a user retweeted/commented on the GiftedForge announcement tweet. */
